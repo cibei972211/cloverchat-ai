@@ -60,8 +60,8 @@ extension View {
 
 // MARK: - 旧系统模拟玻璃（iOS 16–25 回退）
 
-extension View {
-    func simulatedGlass(cornerRadius: CGFloat) -> some View {
+/// 顶层函数：供 glassPanel 与 GlassButtonStyle 共用（无需 View 接收者）
+func simulatedGlass(cornerRadius: CGFloat) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         return shape
             .fill(.ultraThinMaterial)
@@ -85,7 +85,6 @@ extension View {
                 )
             )
             .shadow(color: Color.black.opacity(0.18), radius: 16, x: 0, y: 10)
-    }
 }
 
 // MARK: - 发送气泡渐变色
