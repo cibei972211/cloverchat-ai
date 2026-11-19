@@ -61,7 +61,7 @@ extension View {
 // MARK: - 旧系统模拟玻璃（iOS 16–25 回退）
 
 extension View {
-    fileprivate func simulatedGlass(cornerRadius: CGFloat) -> some View {
+    func simulatedGlass(cornerRadius: CGFloat) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         return shape
             .fill(.ultraThinMaterial)
