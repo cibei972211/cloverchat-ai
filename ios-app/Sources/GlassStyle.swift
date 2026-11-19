@@ -1,23 +1,33 @@
 import SwiftUI
 
-// MARK: - 玻璃材质（全平台统一模拟实现）
+// MARK: - Liquid Glass 材质
 //
-// 结论（多轮真机验证）：iOS 26 原生 glassEffect 在本项目的按钮/面板上
-// 会把玻璃形状错位渲染到布局框之外（布局本身正确——非玻璃元素位置全部正确，
-// 只有玻璃形状跑偏）。因此所有系统版本统一改用 ultraThinMaterial +
-// 高光描边模拟玻璃：它就是普通的背景绘制，严格画在元素自身 bounds 上，
-// 位置由 SwiftUI 布局保证。
+// iOS 26+：系统原生 Liquid Glass（glassEffect / .regular），真实折射与景深；
+// iOS 16–25：ultraThinMaterial + 高光描边模拟。
 //
-// 结构原则：
-// 1. 绝不使用 GlassEffectContainer。
+// 注：此前"玻璃错位出屏"的真正根因是画布被撑大（背景子视图溢出 +
+// 窗口画布大于物理屏幕），已于 v12 修复：背景改为零布局影响的
+// .background，根视图钳制到物理屏幕尺寸。画布正确后 glassEffect
+// 在元素自身 bounds 上渲染，恢复安全使用。
+//
+// 结构原则（保留）：
+// 1. 绝不用 GlassEffectContainer 包全屏（离屏合成有错位风险）。
 // 2. 玻璃只画在元素自身 bounds 上。
-// 3. 可点击元素统一走 GlassButtonStyle（玻璃 + 按压反馈）。
+// 3. 可点击元素统一走 GlassButtonStyle（ButtonStyle 内画玻璃 + 按压反馈）。
 
 // MARK: - 静态玻璃（非按钮元素：输入面板、气泡、分隔条、胶囊）
 
 extension View {
+    @ViewBuilder
     func glassPanel(cornerRadius: CGFloat) -> some View {
-        background { simulatedGlass(cornerRadius: cornerRadius) }
+        if #available(iOS 26.0, *) {
+            self.glassEffect(
+                .regular,
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+        } else {
+            self.background { simulatedGlass(cornerRadius: cornerRadius) }
+        }
     }
 }
 
@@ -26,11 +36,20 @@ extension View {
 struct GlassButtonStyle: ButtonStyle {
     var cornerRadius: CGFloat
 
+    @ViewBuilder
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background { simulatedGlass(cornerRadius: cornerRadius) }
-            .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+        if #available(iOS 26.0, *) {
+            configuration.label
+                .glassEffect(
+                    .regular.interactive(),
+                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                )
+        } else {
+            configuration.label
+                .background { simulatedGlass(cornerRadius: cornerRadius) }
+                .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+        }
     }
 }
 
@@ -41,7 +60,7 @@ extension View {
     }
 }
 
-// MARK: - 模拟玻璃
+// MARK: - 旧系统模拟玻璃（iOS 16–25 回退）
 
 /// 顶层函数：供 glassPanel 与 GlassButtonStyle 共用（无需 View 接收者）
 func simulatedGlass(cornerRadius: CGFloat) -> some View {
