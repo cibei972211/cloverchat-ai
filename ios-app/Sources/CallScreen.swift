@@ -140,7 +140,7 @@ struct CallScreen: View {
                 .buttonStyle(.plain)
         } else {
             Button(action: action) { buttonLabel }
-                .buttonStyle(GlassButtonStyle(cornerRadius: 33))
+                .glassButton(cornerRadius: 33)
         }
     }
 
