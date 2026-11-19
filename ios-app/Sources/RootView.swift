@@ -42,7 +42,7 @@ struct RootView: View {
             }
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
-                Composer(draft: $draft, subject: $subject, onPlus: { activeSheet = .plus })
+                Composer(onPlus: { activeSheet = .plus }, draft: $draft, subject: $subject)
                     .measureSize { composerHeight = $0.height }
             }
         }
