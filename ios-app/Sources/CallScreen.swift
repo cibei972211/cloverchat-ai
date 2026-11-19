@@ -123,25 +123,29 @@ struct CallScreen: View {
     private func callButton(icon: String, label: String, active: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 9) {
-                Image(systemName: icon)
-                    .font(.system(size: 21, weight: .semibold))
-                    .foregroundColor(active ? Color(white: 0.12) : .white)
-                    .frame(width: 66, height: 66)
-                    .background {
-                        if active {
-                            Circle().fill(Color.white.opacity(0.94))
-                        } else {
-                            Circle()
-                                .fill(.ultraThinMaterial)
-                                .overlay(Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 0.8))
-                        }
-                    }
-                    .shadow(color: .black.opacity(0.25), radius: 12, y: 7)
+                callIcon(icon: icon, active: active)
                 Text(label)
                     .font(.system(size: 12))
                     .foregroundColor(.white.opacity(0.8))
             }
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func callIcon(icon: String, active: Bool) -> some View {
+        let icon = Image(systemName: icon)
+            .font(.system(size: 21, weight: .semibold))
+            .foregroundColor(active ? Color(white: 0.12) : .white)
+            .frame(width: 66, height: 66)
+        if active {
+            icon
+                .background(Circle().fill(Color.white.opacity(0.94)))
+                .shadow(color: .black.opacity(0.25), radius: 12, y: 7)
+        } else {
+            icon
+                .glassPanel(cornerRadius: 33)
+                .shadow(color: .black.opacity(0.25), radius: 12, y: 7)
+        }
     }
 }

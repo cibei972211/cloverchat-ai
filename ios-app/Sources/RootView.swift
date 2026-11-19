@@ -29,6 +29,7 @@ struct RootView: View {
                 composer
             }
         }
+        .glassContainer()
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: chat.messages)
         .sheet(item: $activeSheet) { kind in
             sheetContent(kind)
@@ -238,22 +239,17 @@ struct RootView: View {
     private var inputPanel: some View {
         VStack(alignment: .leading, spacing: 0) {
             TextField("主题", text: $subject)
-                .font(.system(size: 15.5))
-                .foregroundColor(.white.opacity(0.95))
-                .padding(.horizontal, 4)
-                .frame(height: 26)
+                .font(.system(size: 15))
+                .foregroundColor(.white.opacity(0.92))
+                .padding(.horizontal, 2)
+                .frame(height: 24)
                 .submitLabel(.next)
                 .onSubmit { inputFocused = true }
 
             Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.38), Color.white.opacity(0.12)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+                .fill(Color.white.opacity(0.18))
                 .frame(height: 0.8)
+                .padding(.horizontal, 2)
 
             HStack(alignment: .bottom, spacing: 6) {
                 TextField("iMessage信息", text: $draft, axis: .vertical)
@@ -262,7 +258,7 @@ struct RootView: View {
                     .focused($inputFocused)
                     .submitLabel(.send)
                     .onSubmit(sendMessage)
-                    .padding(.vertical, 7)
+                    .padding(.vertical, 6)
 
                 if draft.trimmingCharacters(in: .whitespaces).isEmpty {
                     Button {
@@ -271,7 +267,7 @@ struct RootView: View {
                         Image(systemName: "mic.fill")
                             .font(.system(size: 16))
                             .foregroundColor(speech.isRecording ? Color(red: 1.0, green: 0.42, blue: 0.38) : .white)
-                            .frame(width: 30, height: 32)
+                            .frame(width: 30, height: 30)
                     }
                     .opacity(speech.isRecording ? 1 : 0.9)
                 } else {
@@ -295,9 +291,9 @@ struct RootView: View {
             }
         }
         .padding(.horizontal, 14)
-        .padding(.top, 9)
-        .padding(.bottom, 7)
-        .glassPanel(cornerRadius: 30)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
+        .glassPanel(cornerRadius: 22)
         .onChange(of: speech.transcript) { text in
             if speech.isRecording { draft = text }
         }
@@ -378,13 +374,7 @@ struct MessageBubble: View {
                         .foregroundColor(.white.opacity(0.85))
                         .padding(.horizontal, 6)
                 }
-                Text(text)
-                    .font(.system(size: 16.5))
-                    .lineSpacing(3)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 15)
-                    .padding(.vertical, 10)
-                    .background(outgoing ? AnyView(sendBubbleShape) : AnyView(glassBubbleShape))
+                bubbleText
             }
             .frame(maxWidth: 310, alignment: outgoing ? .trailing : .leading)
             if !outgoing { Spacer(minLength: 60) }
@@ -418,30 +408,19 @@ struct MessageBubble: View {
             .shadow(color: Color.blue.opacity(0.30), radius: 13, x: 0, y: 9)
     }
 
-    private var glassBubbleShape: some View {
-        let shape = RoundedRectangle(cornerRadius: 21, style: .continuous)
-        return shape
-            .fill(.ultraThinMaterial)
-            .overlay(
-                LinearGradient(
-                    colors: [Color.white.opacity(0.26), Color.white.opacity(0.05), Color.clear],
-                    startPoint: .topLeading,
-                    endPoint: .bottom
-                )
-                .blendMode(.plusLighter)
-                .clipShape(shape)
-            )
-            .overlay(
-                shape.strokeBorder(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.55), Color.white.opacity(0.12)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 0.8
-                )
-            )
-            .shadow(color: Color.black.opacity(0.16), radius: 14, x: 0, y: 8)
+    @ViewBuilder
+    private var bubbleText: some View {
+        let label = Text(text)
+            .font(.system(size: 16.5))
+            .lineSpacing(3)
+            .foregroundColor(.white)
+            .padding(.horizontal, 15)
+            .padding(.vertical, 10)
+        if outgoing {
+            label.background(sendBubbleShape)
+        } else {
+            label.glassPanel(cornerRadius: 21)
+        }
     }
 }
 
