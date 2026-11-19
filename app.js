@@ -263,8 +263,9 @@
   }
 
   function measureDock() {
+    const kb = parseFloat(getComputedStyle(appEl).getPropertyValue('--kb')) || 0;
     const height = dockEl.offsetHeight;
-    appEl.style.setProperty('--dock-pad', Math.round(height + 60) + 'px');
+    appEl.style.setProperty('--dock-pad', Math.round(height + 60 + kb) + 'px');
   }
 
   /* ---------------- messages ---------------- */
@@ -1082,16 +1083,11 @@
     const viewport = window.visualViewport;
     if (!viewport) return;
     const desktop = window.matchMedia('(min-width: 560px)').matches;
-    if (desktop) {
-      document.documentElement.style.removeProperty('--app-height');
-      return;
-    }
-    const keyboardOpen = window.innerHeight - viewport.height > 120;
-    if (keyboardOpen) {
-      document.documentElement.style.setProperty('--app-height', Math.round(viewport.height) + 'px');
-    } else {
-      document.documentElement.style.removeProperty('--app-height');
-    }
+    const keyboardHeight = desktop
+      ? 0
+      : Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop));
+    appEl.style.setProperty('--kb', keyboardHeight + 'px');
+    appEl.style.setProperty('--dock-pad', Math.round(dockEl.offsetHeight + 60 + keyboardHeight) + 'px');
     requestAnimationFrame(() => scrollToBottom(false));
   }
 
@@ -1157,6 +1153,9 @@
   }
 
   function init() {
+    if (/CloverChatNative/i.test(navigator.userAgent)) {
+      document.documentElement.classList.add('native');
+    }
     loadState();
     applyTheme(state.theme, false);
     setUnread(state.unread);
