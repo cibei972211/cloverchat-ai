@@ -9,6 +9,8 @@ struct RootView: View {
     @State private var subject = ""
     @State private var activeSheet: SheetKind?
     @State private var callPresented = false
+    @State private var topBarHeight: CGFloat = 0
+    @State private var composerHeight: CGFloat = 0
     @FocusState private var inputFocused: Bool
 
     enum SheetKind: String, Identifiable {
@@ -20,8 +22,18 @@ struct RootView: View {
         ZStack {
             backgroundLayer
             messageList
-                .safeAreaInset(edge: .top, spacing: 0) { topBar }
-                .safeAreaInset(edge: .bottom, spacing: 0) { composer }
+                .padding(.top, topBarHeight)
+                .padding(.bottom, composerHeight)
+            VStack(spacing: 0) {
+                topBar
+                    .measureSize { topBarHeight = $0.height }
+                Spacer(minLength: 0)
+            }
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                composer
+                    .measureSize { composerHeight = $0.height }
+            }
         }
         .glassContainer()
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: chat.messages)
@@ -172,8 +184,8 @@ struct RootView: View {
                             .id("live")
                     }
                 }
-                .padding(.top, 14)
-                .padding(.bottom, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 12)
                 .padding(.horizontal, 16)
             }
             .simultaneousGesture(DragGesture().onChanged { _ in inputFocused = false })
@@ -475,5 +487,30 @@ struct TypingBubble: View {
             Spacer(minLength: 60)
         }
         .onAppear { animating = true }
+    }
+}
+
+// MARK: - 动态测量视图尺寸（iOS 16 兼容）
+// 用 PreferenceKey 读取顶栏/输入栏的实际高度，消息列表据此避让，
+// 替代写死的魔术数字，保证任意机型比例正确。
+
+private struct SizePreferenceKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
+    }
+}
+
+extension View {
+    func measureSize(_ onChange: @escaping (CGSize) -> Void) -> some View {
+        background(
+            GeometryReader { geo in
+                Color.clear
+                    .preference(key: SizePreferenceKey.self, value: geo.size)
+            }
+        )
+        .onPreferenceChange(SizePreferenceKey.self) { size in
+            onChange(size)
+        }
     }
 }
