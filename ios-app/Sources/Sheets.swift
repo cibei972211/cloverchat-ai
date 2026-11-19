@@ -350,6 +350,8 @@ struct HistorySheet: View {
                 .font(.system(size: 12))
                 .foregroundColor(.white.opacity(0.45))
                 .padding(.top, 8)
+
+            DiagnosticsLine()
         }
         .padding(18)
         .padding(.bottom, 6)
@@ -383,5 +385,24 @@ struct HistorySheet: View {
         .frame(width: size, height: size)
         .clipShape(Circle())
         .overlay(Circle().strokeBorder(Color.white.opacity(0.7), lineWidth: 1.5))
+    }
+}
+
+// MARK: - 临时诊断行（定位完成后移除）
+//
+// 界面 = App 实际布局画布尺寸；屏幕 = 物理屏幕逻辑尺寸。
+// 两者相等而按钮仍被裁切 => 错位发生在显示层（系统级画面放大），
+// 不在 App 绘制内；两者不等 => 窗口画布异常，由根视图 clamp 修正。
+
+struct DiagnosticsLine: View {
+    var body: some View {
+        GeometryReader { g in
+            let screen = UIScreen.main.bounds
+            Text("诊断 界面\(Int(g.size.width))×\(Int(g.size.height)) 屏幕\(Int(screen.width))×\(Int(screen.height)) 安全区\(Int(g.safeAreaInsets.top))/\(Int(g.safeAreaInsets.bottom))")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.white.opacity(0.45))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(height: 14)
     }
 }

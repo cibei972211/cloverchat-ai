@@ -28,7 +28,6 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
-            backgroundLayer
             messageList
                 .padding(.top, topBarHeight)
                 .padding(.bottom, composerHeight)
@@ -46,6 +45,14 @@ struct RootView: View {
                     .measureSize { composerHeight = $0.height }
             }
         }
+        // 背景改为 .background 修饰：背景内容不参与布局，
+        // 杜绝 scaledToFill 溢出把 ZStack 画布撑大（该模式自 v1 遗留）。
+        .background { backgroundLayer }
+        // 双保险：把内容硬约束在物理屏幕尺寸内并居中。
+        // 若窗口画布被系统/安装工具放大（四周元素被对称裁切的症状），
+        // 此处把内容拉回物理屏幕大小；窗口本来正常时是无副作用的空操作。
+        .frame(maxWidth: UIScreen.main.bounds.width,
+               maxHeight: UIScreen.main.bounds.height)
         .environmentObject(speech)
         .sheet(item: $activeSheet, content: sheetContent)
         .fullScreenCover(isPresented: $callPresented) {

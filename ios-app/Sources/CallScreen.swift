@@ -16,7 +16,6 @@ struct CallScreen: View {
 
     var body: some View {
         ZStack {
-            background
             VStack(spacing: 0) {
                 Spacer()
                 ringingAvatar
@@ -35,6 +34,8 @@ struct CallScreen: View {
             }
             .padding(.bottom, 46)
         }
+        // 与 RootView 同理：背景不参与布局，避免撑大画布
+        .background { background }
         .onReceive(timer) { _ in
             if connected { seconds += 1 }
         }
