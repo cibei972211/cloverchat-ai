@@ -1,0 +1,12 @@
+# uploads and local junk
+.uploads/
+.trae-html-share-packages/
+.DS_Store
+*.log
+node_modules/
+
+# XcodeGen generates this; don't track
+ios-app/*.xcodeproj
+ios-app/build/
+ios-app/Payload/
+ios-app/*.ipa
