@@ -1,53 +1,36 @@
 import SwiftUI
 
-// MARK: - Liquid Glass 材质（重写版）
+// MARK: - 玻璃材质（全平台统一模拟实现）
 //
-// iOS 26+：系统原生 Liquid Glass（glassEffect / .regular），真实折射与景深；
-// iOS 16–25：ultraThinMaterial + 高光描边模拟。
+// 结论（多轮真机验证）：iOS 26 原生 glassEffect 在本项目的按钮/面板上
+// 会把玻璃形状错位渲染到布局框之外（布局本身正确——非玻璃元素位置全部正确，
+// 只有玻璃形状跑偏）。因此所有系统版本统一改用 ultraThinMaterial +
+// 高光描边模拟玻璃：它就是普通的背景绘制，严格画在元素自身 bounds 上，
+// 位置由 SwiftUI 布局保证。
 //
-// 结构原则（前几版踩坑总结）：
-// 1. 绝不用 GlassEffectContainer 包全屏 —— 其离屏合成会把玻璃形状错位画出屏幕。
-// 2. 玻璃只画在元素自身 bounds 上，位置天然正确。
-// 3. 可点击元素统一走 GlassButtonStyle（ButtonStyle 内画玻璃 + 按压反馈），
-//    不在 Button 外面再叠玻璃 modifier。
+// 结构原则：
+// 1. 绝不使用 GlassEffectContainer。
+// 2. 玻璃只画在元素自身 bounds 上。
+// 3. 可点击元素统一走 GlassButtonStyle（玻璃 + 按压反馈）。
 
 // MARK: - 静态玻璃（非按钮元素：输入面板、气泡、分隔条、胶囊）
 
 extension View {
-    @ViewBuilder
     func glassPanel(cornerRadius: CGFloat) -> some View {
-        if #available(iOS 26.0, *) {
-            self.glassEffect(
-                .regular,
-                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            )
-        } else {
-            self.background { simulatedGlass(cornerRadius: cornerRadius) }
-        }
+        background { simulatedGlass(cornerRadius: cornerRadius) }
     }
 }
 
 // MARK: - 按钮玻璃（可点击元素：返回/视频/加号/通话控制等）
 
-/// 系统玻璃按钮样式：iOS 26 用 glassEffect(.interactive)，自带按压放大 +
-/// 流光 + 触点高光；旧系统用模拟玻璃 + isPressed 缩放。
 struct GlassButtonStyle: ButtonStyle {
     var cornerRadius: CGFloat
 
-    @ViewBuilder
     func makeBody(configuration: Configuration) -> some View {
-        if #available(iOS 26.0, *) {
-            configuration.label
-                .glassEffect(
-                    .regular.interactive(),
-                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                )
-        } else {
-            configuration.label
-                .background { simulatedGlass(cornerRadius: cornerRadius) }
-                .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
-        }
+        configuration.label
+            .background { simulatedGlass(cornerRadius: cornerRadius) }
+            .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
@@ -58,33 +41,33 @@ extension View {
     }
 }
 
-// MARK: - 旧系统模拟玻璃（iOS 16–25 回退）
+// MARK: - 模拟玻璃
 
 /// 顶层函数：供 glassPanel 与 GlassButtonStyle 共用（无需 View 接收者）
 func simulatedGlass(cornerRadius: CGFloat) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        return shape
-            .fill(.ultraThinMaterial)
-            .overlay(
+    let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    return shape
+        .fill(.ultraThinMaterial)
+        .overlay(
+            LinearGradient(
+                colors: [Color.white.opacity(0.30), Color.white.opacity(0.05), Color.clear],
+                startPoint: .topLeading,
+                endPoint: .center
+            )
+            .blendMode(.plusLighter)
+            .clipShape(shape)
+        )
+        .overlay(
+            shape.strokeBorder(
                 LinearGradient(
-                    colors: [Color.white.opacity(0.30), Color.white.opacity(0.05), Color.clear],
-                    startPoint: .topLeading,
-                    endPoint: .center
-                )
-                .blendMode(.plusLighter)
-                .clipShape(shape)
+                    colors: [Color.white.opacity(0.55), Color.white.opacity(0.12)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                lineWidth: 0.8
             )
-            .overlay(
-                shape.strokeBorder(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.55), Color.white.opacity(0.12)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 0.8
-                )
-            )
-            .shadow(color: Color.black.opacity(0.18), radius: 16, x: 0, y: 10)
+        )
+        .shadow(color: Color.black.opacity(0.18), radius: 16, x: 0, y: 10)
 }
 
 // MARK: - 发送气泡渐变色
