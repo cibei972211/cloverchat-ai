@@ -120,16 +120,21 @@ struct CallScreen: View {
         }
     }
 
+    @ViewBuilder
     private func callButton(icon: String, label: String, active: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 9) {
-                callIcon(icon: icon, active: active)
-                Text(label)
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.8))
-            }
+        let buttonLabel = VStack(spacing: 9) {
+            callIcon(icon: icon, active: active)
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.8))
         }
-        .buttonStyle(.plain)
+        if active {
+            Button(action: action) { buttonLabel }
+                .buttonStyle(.plain)
+        } else {
+            Button(action: action) { buttonLabel }
+                .buttonStyle(GlassButtonStyle(cornerRadius: 33))
+        }
     }
 
     @ViewBuilder
@@ -141,11 +146,8 @@ struct CallScreen: View {
         if active {
             icon
                 .background(Circle().fill(Color.white.opacity(0.94)))
-                .shadow(color: .black.opacity(0.25), radius: 12, y: 7)
         } else {
             icon
-                .glassPanel(cornerRadius: 33, interactive: true)
-                .shadow(color: .black.opacity(0.25), radius: 12, y: 7)
         }
     }
 }

@@ -104,7 +104,7 @@ struct RootView: View {
             .foregroundColor(.white)
             .frame(width: 44, height: 42)
         }
-        .glassPanel(cornerRadius: 21, interactive: true)
+        .glassButton(cornerRadius: 21)
     }
 
     private var videoButton: some View {
@@ -116,7 +116,7 @@ struct RootView: View {
                 .foregroundColor(.white)
                 .frame(width: 42, height: 42)
         }
-        .glassPanel(cornerRadius: 21, interactive: true)
+        .glassButton(cornerRadius: 21)
     }
 
     private var avatarButton: some View {
@@ -238,7 +238,7 @@ struct RootView: View {
                 .foregroundColor(.white)
                 .frame(width: 47, height: 47)
         }
-        .glassPanel(cornerRadius: 24, interactive: true)
+        .glassButton(cornerRadius: 24)
     }
 
     private var inputPanel: some View {
