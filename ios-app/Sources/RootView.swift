@@ -1,5 +1,14 @@
 import SwiftUI
 
+// MARK: - 根视图
+//
+// 结构原则（已验证可用的布局）：
+// 1. ZStack 叠放：背景 → 消息列表（按运行时测量的顶栏/输入栏高度避让）
+//    → 顶栏（顶部固定）→ 输入区（底部固定）。
+// 2. 玻璃只画在元素自身 bounds 上，全屏绝不包 GlassEffectContainer，
+//    否则玻璃形状会被合成错位、画出屏幕。
+// 3. 动画只作用于消息列表，避免顶栏/输入区的玻璃跟着整屏重绘。
+
 struct RootView: View {
     @EnvironmentObject private var profile: ProfileModel
     @EnvironmentObject private var chat: ChatModel
@@ -11,10 +20,9 @@ struct RootView: View {
     @State private var callPresented = false
     @State private var topBarHeight: CGFloat = 0
     @State private var composerHeight: CGFloat = 0
-    @FocusState private var inputFocused: Bool
 
     enum SheetKind: String, Identifiable {
-        case plus, settings, theme, history
+        case plus, theme, settings, history
         var id: String { rawValue }
     }
 
@@ -25,26 +33,27 @@ struct RootView: View {
                 .padding(.top, topBarHeight)
                 .padding(.bottom, composerHeight)
             VStack(spacing: 0) {
-                topBar
-                    .measureSize { topBarHeight = $0.height }
+                TopBar(
+                    onBack: { activeSheet = .history },
+                    onVideo: { callPresented = true }
+                )
+                .measureSize { topBarHeight = $0.height }
                 Spacer(minLength: 0)
             }
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
-                composer
+                Composer(draft: $draft, subject: $subject, onPlus: { activeSheet = .plus })
                     .measureSize { composerHeight = $0.height }
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: chat.messages)
-        .sheet(item: $activeSheet) { kind in
-            sheetContent(kind)
-        }
+        .environmentObject(speech)
+        .sheet(item: $activeSheet, content: sheetContent)
         .fullScreenCover(isPresented: $callPresented) {
             CallScreen()
         }
     }
 
-    // MARK: - Background
+    // MARK: - 背景
 
     private var backgroundLayer: some View {
         Group {
@@ -75,92 +84,7 @@ struct RootView: View {
         }
     }
 
-    // MARK: - Top bar
-
-    private var topBar: some View {
-        ZStack {
-            HStack(alignment: .top) {
-                backButton
-                Spacer()
-                videoButton
-            }
-            VStack(spacing: 9) {
-                avatarButton
-                namePill
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 6)
-    }
-
-    private var backButton: some View {
-        Button {
-            activeSheet = .history
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
-            }
-            .foregroundColor(.white)
-            .frame(width: 44, height: 42)
-        }
-        .glassButton(cornerRadius: 21)
-    }
-
-    private var videoButton: some View {
-        Button {
-            callPresented = true
-        } label: {
-            Image(systemName: "video.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(width: 42, height: 42)
-        }
-        .glassButton(cornerRadius: 21)
-    }
-
-    private var avatarButton: some View {
-        Button {
-            activeSheet = .history
-        } label: {
-            avatarImage
-                .frame(width: 60, height: 60)
-        }
-    }
-
-    private var avatarImage: some View {
-        Group {
-            if let image = profile.avatar {
-                Image(uiImage: image).resizable().scaledToFill()
-            } else {
-                Image(systemName: "person.crop.circle.fill")
-                    .resizable().scaledToFill()
-                    .foregroundColor(.white.opacity(0.7))
-            }
-        }
-        .clipShape(Circle())
-        .overlay(Circle().strokeBorder(Color.white.opacity(0.95), lineWidth: 2.5))
-        .overlay(Circle().strokeBorder(Color.white.opacity(0.16), lineWidth: 4.5).blur(radius: 1))
-        .shadow(color: .black.opacity(0.32), radius: 12, y: 6)
-    }
-
-    private var namePill: some View {
-        HStack(spacing: 4) {
-            Text(profile.name)
-                .font(.system(size: 16, weight: .semibold))
-                .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(.white.opacity(0.72))
-        }
-        .padding(.leading, 15)
-        .padding(.trailing, 9)
-        .frame(height: 33)
-        .foregroundColor(.white)
-        .glassPanel(cornerRadius: 17)
-    }
-
-    // MARK: - Messages
+    // MARK: - 消息列表
 
     private var messageList: some View {
         ScrollViewReader { proxy in
@@ -187,7 +111,8 @@ struct RootView: View {
                 .padding(.bottom, 12)
                 .padding(.horizontal, 16)
             }
-            .simultaneousGesture(DragGesture().onChanged { _ in inputFocused = false })
+            .scrollDismissesKeyboard(.immediately)
+            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: chat.messages)
             .onAppear { scrollToBottom(proxy) }
             .onChange(of: chat.messages) { _ in scrollToBottom(proxy) }
             .onChange(of: chat.liveText) { _ in scrollToBottom(proxy, animated: false) }
@@ -217,279 +142,49 @@ struct RootView: View {
         return chat.messages[index].time.timeIntervalSince(chat.messages[index - 1].time) > 300
     }
 
-    // MARK: - Composer
-
-    private var composer: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            plusButton
-            inputPanel
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 10)
-    }
-
-    private var plusButton: some View {
-        Button {
-            activeSheet = .plus
-            inputFocused = false
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 19, weight: .medium))
-                .foregroundColor(.white)
-                .frame(width: 47, height: 47)
-        }
-        .glassButton(cornerRadius: 24)
-    }
-
-    private var inputPanel: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            TextField("主题", text: $subject)
-                .font(.system(size: 15))
-                .foregroundColor(.white.opacity(0.92))
-                .padding(.horizontal, 2)
-                .frame(height: 24)
-                .submitLabel(.next)
-                .onSubmit { inputFocused = true }
-
-            Rectangle()
-                .fill(Color.white.opacity(0.18))
-                .frame(height: 0.8)
-                .padding(.horizontal, 2)
-
-            HStack(alignment: .bottom, spacing: 6) {
-                TextField("iMessage信息", text: $draft, axis: .vertical)
-                    .font(.system(size: 17))
-                    .lineLimit(1...5)
-                    .focused($inputFocused)
-                    .submitLabel(.send)
-                    .onSubmit(sendMessage)
-                    .padding(.vertical, 6)
-
-                if draft.trimmingCharacters(in: .whitespaces).isEmpty {
-                    Button {
-                        speech.toggle()
-                    } label: {
-                        Image(systemName: "mic.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(speech.isRecording ? Color(red: 1.0, green: 0.42, blue: 0.38) : .white)
-                            .frame(width: 30, height: 30)
-                    }
-                    .opacity(speech.isRecording ? 1 : 0.9)
-                } else {
-                    Button(action: sendMessage) {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 30, height: 30)
-                            .background(
-                                Circle().fill(
-                                    LinearGradient(
-                                        colors: [Palette.sendTop, Palette.sendBottom],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                            )
-                            .shadow(color: Color.blue.opacity(0.35), radius: 6, y: 3)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 8)
-        .padding(.bottom, 6)
-        .glassPanel(cornerRadius: 22)
-        .onChange(of: speech.transcript) { text in
-            if speech.isRecording { draft = text }
-        }
-        .onChange(of: speech.isRecording) { recording in
-            if !recording { _ = speech.transcript }
-        }
-    }
-
-    private func sendMessage() {
-        chat.send(text: draft, subject: subject)
-        draft = ""
-        subject = ""
-        speech.stop()
-    }
-
-    // MARK: - Sheets
+    // MARK: - 弹层
 
     @ViewBuilder
     private func sheetContent(_ kind: SheetKind) -> some View {
         switch kind {
         case .plus:
-            PlusSheet { next in
-                activeSheet = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    activeSheet = next
-                }
-            }
+            PlusSheet(
+                onNewChat: { chat.newChat(); resetDraft(); activeSheet = nil },
+                onTheme: { navigate(to: .theme) },
+                onSettings: { navigate(to: .settings) },
+                onClear: { chat.clearChat(); resetDraft(); activeSheet = nil }
+            )
             .presentationDetents([.medium])
-        case .settings:
-            SettingsSheet()
-                .presentationDetents([.large])
         case .theme:
             ThemeSheet()
                 .presentationDetents([.medium, .large])
+        case .settings:
+            SettingsSheet()
+                .presentationDetents([.large])
         case .history:
-            HistorySheet { next in
-                activeSheet = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    activeSheet = next
-                }
-            }
+            HistorySheet(
+                onNewChat: { chat.newChat(); resetDraft(); activeSheet = nil },
+                onClear: { chat.clearChat(); resetDraft(); activeSheet = nil }
+            )
             .presentationDetents([.medium])
         }
     }
-}
 
-// MARK: - Bubbles
-
-struct MessageBubble: View {
-    var message: ChatMessage?
-    var liveText: String?
-
-    init(message: ChatMessage) {
-        self.message = message
-        self.liveText = nil
-    }
-
-    init(liveText: String) {
-        self.message = nil
-        self.liveText = liveText
-    }
-
-    private var outgoing: Bool {
-        message?.role == .user
-    }
-
-    private var text: String {
-        message?.text ?? liveText ?? ""
-    }
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 0) {
-            if outgoing { Spacer(minLength: 60) }
-            VStack(alignment: outgoing ? .trailing : .leading, spacing: 3) {
-                if let subject = message?.subject, !subject.isEmpty {
-                    Text(subject)
-                        .font(.system(size: 12.5, weight: .bold))
-                        .foregroundColor(.white.opacity(0.85))
-                        .padding(.horizontal, 6)
-                }
-                bubbleText
-            }
-            .frame(maxWidth: 310, alignment: outgoing ? .trailing : .leading)
-            if !outgoing { Spacer(minLength: 60) }
+    /// 关闭当前弹层后，等收起动画结束再打开下一个（直接切换会被取消）
+    private func navigate(to kind: SheetKind) {
+        activeSheet = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            activeSheet = kind
         }
-        .transition(.asymmetric(
-            insertion: .move(edge: .bottom).combined(with: .opacity),
-            removal: .opacity
-        ))
     }
 
-    private var sendBubbleShape: some View {
-        let shape = RoundedRectangle(cornerRadius: 21, style: .continuous)
-        return shape
-            .fill(
-                LinearGradient(
-                    colors: [Palette.sendTop, Palette.sendMid, Palette.sendBottom],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .overlay(
-                LinearGradient(
-                    colors: [Color.white.opacity(0.32), Color.white.opacity(0.06), Color.clear],
-                    startPoint: .topLeading,
-                    endPoint: .bottom
-                )
-                .blendMode(.plusLighter)
-                .clipShape(shape)
-            )
-            .overlay(shape.strokeBorder(Color.white.opacity(0.22), lineWidth: 0.6))
-            .shadow(color: Color.blue.opacity(0.30), radius: 13, x: 0, y: 9)
-    }
-
-    @ViewBuilder
-    private var bubbleText: some View {
-        let label = Text(text)
-            .font(.system(size: 16.5))
-            .lineSpacing(3)
-            .foregroundColor(.white)
-            .padding(.horizontal, 15)
-            .padding(.vertical, 10)
-        if outgoing {
-            label.background(sendBubbleShape)
-        } else {
-            label.glassPanel(cornerRadius: 21)
-        }
+    private func resetDraft() {
+        draft = ""
+        subject = ""
     }
 }
 
-struct TimeDivider: View {
-    let time: Date
-
-    var body: some View {
-        Text(label)
-            .font(.system(size: 11.5, weight: .medium))
-            .foregroundColor(.white.opacity(0.92))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 5)
-            .glassPanel(cornerRadius: 13)
-            .padding(.vertical, 4)
-    }
-
-    private var label: String {
-        let formatter = DateFormatter()
-        let now = Calendar.current.startOfDay(for: Date())
-        let day = Calendar.current.startOfDay(for: time)
-        let base: String
-        if day == now {
-            base = "今天"
-        } else if day == Calendar.current.date(byAdding: .day, value: -1, to: now) {
-            base = "昨天"
-        } else {
-            formatter.dateFormat = "M月d日"
-            base = formatter.string(from: time)
-        }
-        formatter.dateFormat = "HH:mm"
-        return base + " " + formatter.string(from: time)
-    }
-}
-
-struct TypingBubble: View {
-    @State private var animating = false
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 0) {
-            HStack(spacing: 5) {
-                ForEach(0..<3, id: \.self) { index in
-                    Circle()
-                        .fill(Color.white.opacity(0.9))
-                        .frame(width: 7, height: 7)
-                        .offset(y: animating ? -4 : 0)
-                        .opacity(animating ? 1 : 0.5)
-                        .animation(
-                            .easeInOut(duration: 0.5)
-                                .repeatForever(autoreverses: true)
-                                .delay(Double(index) * 0.16),
-                            value: animating
-                        )
-                }
-            }
-            .padding(.horizontal, 17)
-            .padding(.vertical, 15)
-            .glassPanel(cornerRadius: 21)
-            Spacer(minLength: 60)
-        }
-        .onAppear { animating = true }
-    }
-}
-
-// MARK: - 动态测量视图尺寸（iOS 16 兼容）
+// MARK: - 运行时测量视图尺寸（iOS 16 兼容）
 // 用 PreferenceKey 读取顶栏/输入栏的实际高度，消息列表据此避让，
 // 替代写死的魔术数字，保证任意机型比例正确。
 

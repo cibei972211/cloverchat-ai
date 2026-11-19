@@ -1,12 +1,38 @@
 import PhotosUI
 import SwiftUI
 
-// MARK: - Plus menu
+// MARK: - 弹层共享行样式
+
+private func sheetRow(icon: String,
+                      tint: Color,
+                      title: String,
+                      destructive: Bool = false,
+                      action: @escaping () -> Void) -> some View {
+    Button(action: action) {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 37, height: 37)
+                .background(tint.opacity(0.55), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Text(title)
+                .font(.system(size: 16.5))
+                .foregroundColor(destructive ? Color(red: 1.0, green: 0.54, blue: 0.5) : .white)
+            Spacer()
+        }
+        .padding(10)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+}
+
+// MARK: - 加号菜单
 
 struct PlusSheet: View {
-    @EnvironmentObject private var chat: ChatModel
-    @Environment(\.dismiss) private var dismiss
-    let navigate: (RootView.SheetKind) -> Void
+    let onNewChat: () -> Void
+    let onTheme: () -> Void
+    let onSettings: () -> Void
+    let onClear: () -> Void
 
     var body: some View {
         VStack(spacing: 4) {
@@ -15,52 +41,18 @@ struct PlusSheet: View {
                 .frame(maxWidth: .infinity)
                 .padding(.bottom, 10)
 
-            row(icon: "plus.bubble.fill", tint: .green, title: "新对话") {
-                chat.newChat()
-                dismiss()
-            }
-            row(icon: "photo.on.rectangle", tint: .blue, title: "聊天背景") {
-                navigate(.theme)
-            }
-            row(icon: "gearshape.fill", tint: .gray, title: "AI 设置") {
-                navigate(.settings)
-            }
+            sheetRow(icon: "plus.bubble.fill", tint: .green, title: "新对话", action: onNewChat)
+            sheetRow(icon: "photo.on.rectangle", tint: .blue, title: "聊天背景", action: onTheme)
+            sheetRow(icon: "gearshape.fill", tint: .gray, title: "AI 设置", action: onSettings)
             Divider().overlay(Color.white.opacity(0.12)).padding(.vertical, 6)
-            row(icon: "trash.fill", tint: .red, title: "清空对话") {
-                chat.clearChat()
-                dismiss()
-            }
+            sheetRow(icon: "trash.fill", tint: .red, title: "清空对话", destructive: true, action: onClear)
         }
         .padding(18)
         .padding(.bottom, 6)
     }
-
-    private func row(icon: String, tint: Color, title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 14) {
-                Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 37, height: 37)
-                    .background(tint.opacity(0.55), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                Text(title)
-                    .font(.system(size: 16.5))
-                    .foregroundColor(title == "清空对话" ? Color(red: 1.0, green: 0.54, blue: 0.5) : .white)
-                Spacer()
-            }
-            .padding(10)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
 }
 
-extension Notification.Name {
-    static let newChatRequested = Notification.Name("newChatRequested")
-    static let clearChatRequested = Notification.Name("clearChatRequested")
-}
-
-// MARK: - Theme picker
+// MARK: - 聊天背景
 
 struct ThemeSheet: View {
     @EnvironmentObject private var profile: ProfileModel
@@ -154,7 +146,7 @@ struct ThemeSheet: View {
     }
 }
 
-// MARK: - Settings
+// MARK: - 个性化 / AI 设置
 
 struct SettingsSheet: View {
     @EnvironmentObject private var profile: ProfileModel
@@ -311,12 +303,14 @@ struct SettingsSheet: View {
     }
 }
 
-// MARK: - History
+// MARK: - 消息 / 历史
 
 struct HistorySheet: View {
     @EnvironmentObject private var profile: ProfileModel
     @EnvironmentObject private var chat: ChatModel
-    let navigate: (RootView.SheetKind) -> Void
+
+    let onNewChat: () -> Void
+    let onClear: () -> Void
 
     var body: some View {
         VStack(spacing: 8) {
@@ -325,39 +319,32 @@ struct HistorySheet: View {
                 .frame(maxWidth: .infinity)
                 .padding(.bottom, 6)
 
-            Button {
-                chat.newChat()
-                dismiss()
-            } label: {
-                HStack(spacing: 12) {
-                    avatar(size: 50)
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(profile.name)
-                                .font(.system(size: 16.5, weight: .semibold))
-                                .foregroundColor(.white)
-                            Spacer()
-                            Text(timeLabel)
-                                .font(.system(size: 11.5))
-                                .foregroundColor(.white.opacity(0.45))
-                        }
-                        Text(preview)
-                            .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.55))
-                            .lineLimit(1)
+            HStack(spacing: 12) {
+                avatar(size: 50)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(profile.name)
+                            .font(.system(size: 16.5, weight: .semibold))
+                            .foregroundColor(.white)
+                        Spacer()
+                        Text(timeLabel)
+                            .font(.system(size: 11.5))
+                            .foregroundColor(.white.opacity(0.45))
                     }
+                    Text(preview)
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.55))
+                        .lineLimit(1)
                 }
-                .padding(10)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .padding(10)
 
             Rectangle().fill(Color.white.opacity(0.12)).frame(height: 0.8).padding(.vertical, 4)
 
-            row(icon: "plus.bubble.fill", title: "新对话") {
-                chat.newChat()
-                dismiss()
-            }
+            sheetRow(icon: "plus.bubble.fill", tint: .blue, title: "开始新对话", action: onNewChat)
+            sheetRow(icon: "trash.fill", tint: .red, title: "清空对话", destructive: true, action: onClear)
+                .opacity(chat.messages.isEmpty ? 0.45 : 1)
+                .disabled(chat.messages.isEmpty)
 
             Text("消息保存在这台设备上")
                 .font(.system(size: 12))
@@ -367,8 +354,6 @@ struct HistorySheet: View {
         .padding(18)
         .padding(.bottom, 6)
     }
-
-    @Environment(\.dismiss) private var dismiss
 
     private var preview: String {
         if let last = chat.messages.last {
@@ -398,24 +383,5 @@ struct HistorySheet: View {
         .frame(width: size, height: size)
         .clipShape(Circle())
         .overlay(Circle().strokeBorder(Color.white.opacity(0.7), lineWidth: 1.5))
-    }
-
-    private func row(icon: String, title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 14) {
-                Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 37, height: 37)
-                    .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                Text(title)
-                    .font(.system(size: 16.5))
-                    .foregroundColor(.white)
-                Spacer()
-            }
-            .padding(10)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }

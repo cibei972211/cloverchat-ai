@@ -1,5 +1,7 @@
 import SwiftUI
 
+// MARK: - 视频通话全屏页：脉冲波纹 + 计时 + 静音/摄像头/挂断
+
 struct CallScreen: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var profile: ProfileModel
@@ -68,9 +70,13 @@ struct CallScreen: View {
                     )
             }
             Group {
-                Image(systemName: "person.crop.circle.fill")
-                    .resizable().scaledToFill()
-                    .foregroundColor(.white.opacity(0.85))
+                if let image = profile.avatar {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else {
+                    Image(systemName: "person.crop.circle.fill")
+                        .resizable().scaledToFill()
+                        .foregroundColor(.white.opacity(0.85))
+                }
             }
             .frame(width: 114, height: 114)
             .clipShape(Circle())
