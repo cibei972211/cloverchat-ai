@@ -35,7 +35,6 @@ struct RootView: View {
                     .measureSize { composerHeight = $0.height }
             }
         }
-        .glassContainer()
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: chat.messages)
         .sheet(item: $activeSheet) { kind in
             sheetContent(kind)

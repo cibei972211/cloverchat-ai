@@ -2,8 +2,12 @@ import SwiftUI
 
 // MARK: - Liquid Glass 材质
 //
-// iOS 26+ 走系统原生 Liquid Glass（glassEffect），呈现真实的折射、景深与融合效果；
+// iOS 26+ 走系统原生 Liquid Glass（glassEffect），呈现真实的折射与景深；
 // iOS 16–25 回退到 ultraThinMaterial + 高光描边的模拟玻璃。
+//
+// 重要教训：不要用 GlassEffectContainer 包裹整个屏幕。实测其离屏合成会把玻璃形状
+// 错位渲染到屏幕外（按钮玻璃卡一半出屏，白色图标位置却是对的）。每个元素独立
+// glassEffect 即可，玻璃画在自身 bounds 上，位置天然正确。
 
 extension View {
     /// cornerRadius: 玻璃形状圆角
@@ -49,19 +53,6 @@ extension View {
                     )
                     .shadow(color: Color.black.opacity(0.18), radius: 16, x: 0, y: 10)
             }
-        }
-    }
-}
-
-// 包裹一层 GlassEffectContainer（iOS 26+），让多个液态玻璃形状相互融合、可变形，
-// 这是系统原生 Liquid Glass 看起来“融在一起”的关键。
-extension View {
-    @ViewBuilder
-    func glassContainer() -> some View {
-        if #available(iOS 26.0, *) {
-            GlassEffectContainer { self }
-        } else {
-            self
         }
     }
 }
