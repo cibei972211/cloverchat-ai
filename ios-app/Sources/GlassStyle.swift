@@ -8,11 +8,11 @@ import SwiftUI
 // 结构原则：
 // 1. 绝不用 GlassEffectContainer 包全屏（离屏合成有错位风险）。
 // 2. 玻璃只画在元素自身 bounds 上。
-// 3. 可点击元素：iOS 26 玻璃必须套在 Button 外层（.glassButton 修饰符
-//    里先 .buttonStyle(.plain) 再 .glassEffect(.interactive())）——
-//    若把 interactive 玻璃放进 ButtonStyle 的 label 内部，玻璃层会
-//    拦截触摸导致按钮点不动；外层包裹则是 Apple 文档标准用法，
-//    按压反馈与点击动作都正常。
+// 3. 可点击元素绝不用 .interactive() 玻璃——v13/v14 实机验证：
+//    interactive 的按压手势会拦截 Button 的点击（玻璃放 label 内层
+//    或外层都一样），导致按钮点不动。非交互 .regular 玻璃不拦触摸
+//    （输入面板里的 TextField 一直可正常输入），按钮按压反馈改由
+//    isPressed 缩放提供。
 
 // MARK: - 静态玻璃（非按钮元素：输入面板、气泡、分隔条、胶囊）
 
@@ -32,32 +32,42 @@ extension View {
 
 // MARK: - 按钮玻璃（可点击元素：返回/视频/加号/通话控制等）
 
+/// 按压反馈：缩放 + 轻微变暗（玻璃在外层，样式只动 label）
+struct GlassButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.93 : 1.0)
+            .opacity(configuration.isPressed ? 0.92 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+/// 旧系统回退（iOS 16–25）：模拟玻璃背景 + 按压缩放
+struct GlassFallbackButtonStyle: ButtonStyle {
+    var cornerRadius: CGFloat
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background { simulatedGlass(cornerRadius: cornerRadius) }
+            .scaleEffect(configuration.isPressed ? 0.93 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
 extension View {
     /// 便捷入口：把按钮换成玻璃样式
     @ViewBuilder
     func glassButton(cornerRadius: CGFloat) -> some View {
         if #available(iOS 26.0, *) {
             self
-                .buttonStyle(.plain)
+                .buttonStyle(GlassButtonStyle())
                 .glassEffect(
-                    .regular.interactive(),
+                    .regular,
                     in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 )
         } else {
-            self.buttonStyle(GlassButtonStyle(cornerRadius: cornerRadius))
+            self.buttonStyle(GlassFallbackButtonStyle(cornerRadius: cornerRadius))
         }
-    }
-}
-
-/// 旧系统回退（iOS 16–25）：模拟玻璃 + isPressed 缩放
-struct GlassButtonStyle: ButtonStyle {
-    var cornerRadius: CGFloat
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background { simulatedGlass(cornerRadius: cornerRadius) }
-            .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
