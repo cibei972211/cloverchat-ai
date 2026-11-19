@@ -6,13 +6,23 @@ import SwiftUI
 // iOS 16–25 回退到 ultraThinMaterial + 高光描边的模拟玻璃。
 
 extension View {
+    /// cornerRadius: 玻璃形状圆角
+    /// interactive:  是否启用 iOS 26 原生按压反馈（放大 + 流光 + 触点高光）。
+    ///              仅对可点击元素（Button）生效，是真·Liquid Glass 的标志动画。
     @ViewBuilder
-    func glassPanel(cornerRadius: CGFloat) -> some View {
+    func glassPanel(cornerRadius: CGFloat, interactive: Bool = false) -> some View {
         if #available(iOS 26.0, *) {
-            self.glassEffect(
-                .regular,
-                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            )
+            if interactive {
+                self.glassEffect(
+                    .regular.interactive(),
+                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                )
+            } else {
+                self.glassEffect(
+                    .regular,
+                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                )
+            }
         } else {
             self.background {
                 let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)

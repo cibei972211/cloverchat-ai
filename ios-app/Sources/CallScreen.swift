@@ -144,7 +144,7 @@ struct CallScreen: View {
                 .shadow(color: .black.opacity(0.25), radius: 12, y: 7)
         } else {
             icon
-                .glassPanel(cornerRadius: 33)
+                .glassPanel(cornerRadius: 33, interactive: true)
                 .shadow(color: .black.opacity(0.25), radius: 12, y: 7)
         }
     }

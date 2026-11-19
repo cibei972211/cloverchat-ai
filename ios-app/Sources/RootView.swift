@@ -20,14 +20,8 @@ struct RootView: View {
         ZStack {
             backgroundLayer
             messageList
-            VStack(spacing: 0) {
-                topBar
-                Spacer(minLength: 0)
-            }
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                composer
-            }
+                .safeAreaInset(edge: .top, spacing: 0) { topBar }
+                .safeAreaInset(edge: .bottom, spacing: 0) { composer }
         }
         .glassContainer()
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: chat.messages)
@@ -99,7 +93,7 @@ struct RootView: View {
             .foregroundColor(.white)
             .frame(width: 44, height: 42)
         }
-        .glassPanel(cornerRadius: 21)
+        .glassPanel(cornerRadius: 21, interactive: true)
     }
 
     private var videoButton: some View {
@@ -111,7 +105,7 @@ struct RootView: View {
                 .foregroundColor(.white)
                 .frame(width: 42, height: 42)
         }
-        .glassPanel(cornerRadius: 21)
+        .glassPanel(cornerRadius: 21, interactive: true)
     }
 
     private var avatarButton: some View {
@@ -178,8 +172,8 @@ struct RootView: View {
                             .id("live")
                     }
                 }
-                .padding(.top, 118)
-                .padding(.bottom, 135)
+                .padding(.top, 14)
+                .padding(.bottom, 16)
                 .padding(.horizontal, 16)
             }
             .simultaneousGesture(DragGesture().onChanged { _ in inputFocused = false })
@@ -233,7 +227,7 @@ struct RootView: View {
                 .foregroundColor(.white)
                 .frame(width: 47, height: 47)
         }
-        .glassPanel(cornerRadius: 24)
+        .glassPanel(cornerRadius: 24, interactive: true)
     }
 
     private var inputPanel: some View {

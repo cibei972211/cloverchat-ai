@@ -245,7 +245,7 @@ struct SettingsSheet: View {
                         .foregroundColor(.white.opacity(0.85))
                         .frame(maxWidth: .infinity)
                         .frame(height: 46)
-                        .glassPanel(cornerRadius: 16)
+                        .glassPanel(cornerRadius: 16, interactive: true)
                 }
                 .buttonStyle(.plain)
             }
