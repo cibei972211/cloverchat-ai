@@ -5,15 +5,14 @@ import SwiftUI
 // iOS 26+：系统原生 Liquid Glass（glassEffect / .regular），真实折射与景深；
 // iOS 16–25：ultraThinMaterial + 高光描边模拟。
 //
-// 注：此前"玻璃错位出屏"的真正根因是画布被撑大（背景子视图溢出 +
-// 窗口画布大于物理屏幕），已于 v12 修复：背景改为零布局影响的
-// .background，根视图钳制到物理屏幕尺寸。画布正确后 glassEffect
-// 在元素自身 bounds 上渲染，恢复安全使用。
-//
-// 结构原则（保留）：
+// 结构原则：
 // 1. 绝不用 GlassEffectContainer 包全屏（离屏合成有错位风险）。
 // 2. 玻璃只画在元素自身 bounds 上。
-// 3. 可点击元素统一走 GlassButtonStyle（ButtonStyle 内画玻璃 + 按压反馈）。
+// 3. 可点击元素：iOS 26 玻璃必须套在 Button 外层（.glassButton 修饰符
+//    里先 .buttonStyle(.plain) 再 .glassEffect(.interactive())）——
+//    若把 interactive 玻璃放进 ButtonStyle 的 label 内部，玻璃层会
+//    拦截触摸导致按钮点不动；外层包裹则是 Apple 文档标准用法，
+//    按压反馈与点击动作都正常。
 
 // MARK: - 静态玻璃（非按钮元素：输入面板、气泡、分隔条、胶囊）
 
@@ -33,30 +32,32 @@ extension View {
 
 // MARK: - 按钮玻璃（可点击元素：返回/视频/加号/通话控制等）
 
-struct GlassButtonStyle: ButtonStyle {
-    var cornerRadius: CGFloat
-
+extension View {
+    /// 便捷入口：把按钮换成玻璃样式
     @ViewBuilder
-    func makeBody(configuration: Configuration) -> some View {
+    func glassButton(cornerRadius: CGFloat) -> some View {
         if #available(iOS 26.0, *) {
-            configuration.label
+            self
+                .buttonStyle(.plain)
                 .glassEffect(
                     .regular.interactive(),
                     in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 )
         } else {
-            configuration.label
-                .background { simulatedGlass(cornerRadius: cornerRadius) }
-                .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+            self.buttonStyle(GlassButtonStyle(cornerRadius: cornerRadius))
         }
     }
 }
 
-extension View {
-    /// 便捷入口：把按钮换成玻璃样式
-    func glassButton(cornerRadius: CGFloat) -> some View {
-        buttonStyle(GlassButtonStyle(cornerRadius: cornerRadius))
+/// 旧系统回退（iOS 16–25）：模拟玻璃 + isPressed 缩放
+struct GlassButtonStyle: ButtonStyle {
+    var cornerRadius: CGFloat
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background { simulatedGlass(cornerRadius: cornerRadius) }
+            .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
@@ -89,10 +90,12 @@ func simulatedGlass(cornerRadius: CGFloat) -> some View {
         .shadow(color: Color.black.opacity(0.18), radius: 16, x: 0, y: 10)
 }
 
-// MARK: - 发送气泡渐变色
+// MARK: - 配色
 
 enum Palette {
     static let sendTop = Color(red: 0.36, green: 0.70, blue: 1.0)
     static let sendMid = Color(red: 0.12, green: 0.47, blue: 1.0)
     static let sendBottom = Color(red: 0.02, green: 0.36, blue: 0.92)
+    /// 发出气泡的玻璃 tint（半透蓝）
+    static let sendTint = Color(red: 0.08, green: 0.42, blue: 0.95)
 }

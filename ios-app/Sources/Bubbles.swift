@@ -55,7 +55,14 @@ struct MessageBubble: View {
         .frame(maxWidth: 300, alignment: .leading)
 
         if outgoing {
-            content.background(sendBubbleShape)
+            if #available(iOS 26.0, *) {
+                content.glassEffect(
+                    .regular.tint(Palette.sendTint),
+                    in: RoundedRectangle(cornerRadius: 21, style: .continuous)
+                )
+            } else {
+                content.background(sendBubbleShape)
+            }
         } else {
             content.glassPanel(cornerRadius: 21)
         }

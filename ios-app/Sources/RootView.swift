@@ -29,7 +29,7 @@ struct RootView: View {
     var body: some View {
         ZStack {
             messageList
-                .padding(.top, topBarHeight)
+                .padding(.top, topBarHeight + 10)
                 .padding(.bottom, composerHeight)
             VStack(spacing: 0) {
                 TopBar(
