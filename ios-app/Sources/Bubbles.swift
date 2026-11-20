@@ -55,39 +55,35 @@ struct MessageBubble: View {
         .frame(maxWidth: 300, alignment: .leading)
 
         if outgoing {
-            if #available(iOS 26.0, *) {
-                content.glassEffect(
-                    .regular.tint(Palette.sendTint),
-                    in: RoundedRectangle(cornerRadius: 21, style: .continuous)
-                )
-            } else {
-                content.background(sendBubbleShape)
-            }
+            content.background(sendBubbleShape)
         } else {
             content.glassPanel(cornerRadius: 21)
         }
     }
 
+    /// 半透蓝玻璃气泡：材质打底 + 蓝色渐变半覆盖（可透出背景）
     private var sendBubbleShape: some View {
         let shape = RoundedRectangle(cornerRadius: 21, style: .continuous)
         return shape
-            .fill(
+            .fill(.ultraThinMaterial)
+            .overlay(
                 LinearGradient(
-                    colors: [Palette.sendTop, Palette.sendMid, Palette.sendBottom],
+                    colors: [Palette.sendTop.opacity(0.82), Palette.sendMid.opacity(0.85), Palette.sendBottom.opacity(0.88)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
+                .clipShape(shape)
             )
             .overlay(
                 LinearGradient(
-                    colors: [Color.white.opacity(0.32), Color.white.opacity(0.06), Color.clear],
+                    colors: [Color.white.opacity(0.30), Color.white.opacity(0.05), Color.clear],
                     startPoint: .topLeading,
                     endPoint: .bottom
                 )
                 .blendMode(.plusLighter)
                 .clipShape(shape)
             )
-            .overlay(shape.strokeBorder(Color.white.opacity(0.22), lineWidth: 0.6))
+            .overlay(shape.strokeBorder(Color.white.opacity(0.30), lineWidth: 0.8))
             .shadow(color: Color.blue.opacity(0.30), radius: 13, x: 0, y: 9)
     }
 }
