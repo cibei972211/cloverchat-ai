@@ -33,9 +33,13 @@ struct CallScreen: View {
                 actions
             }
             .padding(.bottom, 46)
+            // 撑满宽度：不然 ZStack 只有内容那么宽，模糊背景也会跟着缩成一条
+            .frame(maxWidth: .infinity)
         }
         // 与 RootView 同理：背景不参与布局，避免撑大画布
         .background { background }
+        .frame(maxWidth: UIScreen.main.bounds.width,
+               maxHeight: UIScreen.main.bounds.height)
         .onReceive(timer) { _ in
             if connected { seconds += 1 }
         }
@@ -95,50 +99,59 @@ struct CallScreen: View {
     }
 
     private var actions: some View {
-        HStack(spacing: 36) {
+        HStack(spacing: 34) {
             callButton(icon: muted ? "mic.slash.fill" : "mic.fill",
                        label: muted ? "取消静音" : "静音",
-                       active: muted) { muted.toggle() }
+                       iconColor: muted ? Color(white: 0.12) : .white,
+                       tint: muted ? .white : .clear,
+                       tintStrength: muted ? 0.86 : 0.0,
+                       haptic: .pick) { muted.toggle() }
+
             callButton(icon: cameraOff ? "video.slash.fill" : "video.fill",
                        label: cameraOff ? "打开摄像头" : "摄像头",
-                       active: cameraOff) { cameraOff.toggle() }
-            Button {
-                dismiss()
-            } label: {
-                VStack(spacing: 9) {
-                    Image(systemName: "phone.down.fill")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(width: 66, height: 66)
-                    Text("挂断")
-                        .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.8))
-                }
-            }
-            // 红色液体玻璃 + 危险动作触感
-            .glassButton(cornerRadius: 33,
-                         tint: Palette.hangup,
-                         tintStrength: 0.82,
-                         haptic: .warning)
+                       iconColor: cameraOff ? Color(white: 0.12) : .white,
+                       tint: cameraOff ? .white : .clear,
+                       tintStrength: cameraOff ? 0.86 : 0.0,
+                       haptic: .pick) { cameraOff.toggle() }
+
+            callButton(icon: "phone.down.fill",
+                       label: "挂断",
+                       iconColor: .white,
+                       tint: Palette.hangup,
+                       tintStrength: 0.82,
+                       haptic: .warning) { dismiss() }
         }
     }
 
-    private func callButton(icon: String, label: String, active: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    /// 圆形玻璃图标（66×66，圆角取一半 = 正圆）+ 下面一行文字。
+    /// 玻璃只画在图标这块 66×66 上，文字留在玻璃外面 ——
+    /// 之前是把整块「图标 + 文字」一起套进 glassButton，玻璃形状跟着 label 一起变高，
+    /// 66 宽 × 90 高、圆角 33，就成了一个竖着的长胶囊，看起来像「按键被拉长」。
+    private func callButton(icon: String,
+                            label: String,
+                            iconColor: Color,
+                            tint: Color,
+                            tintStrength: Double,
+                            haptic: HapticKind,
+                            action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.fire(haptic)
+            action()
+        } label: {
             VStack(spacing: 9) {
                 Image(systemName: icon)
-                    .font(.system(size: 21, weight: .semibold))
-                    .foregroundColor(active ? Color(white: 0.12) : .white)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(iconColor)
                     .frame(width: 66, height: 66)
+                    .glassPanel(cornerRadius: 33, tint: tint, tintStrength: tintStrength)
                 Text(label)
                     .font(.system(size: 12))
                     .foregroundColor(.white.opacity(0.8))
+                    .fixedSize()
             }
+            // 整块（含下方文字）都能点，但玻璃只有图标那一个圆
+            .contentShape(Rectangle())
         }
-        // 激活态 = 玻璃被点亮成白色液体，未激活 = 无色玻璃
-        .glassButton(cornerRadius: 33,
-                     tint: active ? .white : .clear,
-                     tintStrength: active ? 0.86 : 0.0,
-                     haptic: .pick)
+        .buttonStyle(PressScaleButtonStyle())
     }
 }

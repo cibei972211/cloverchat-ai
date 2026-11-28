@@ -239,13 +239,19 @@ struct MaterialGlassRingButtonStyle: ButtonStyle {
 // MARK: - 统一入口
 
 extension View {
-    /// 静态玻璃面板（非交互元素：输入面板、气泡、分隔条、胶囊）
+    /// 静态玻璃面板（非交互元素：输入面板、气泡、分隔条、胶囊、圆形按键底）
+    /// - tint/tintStrength：可选着色，圆形通话键这类需要白色/红色玻璃时用
     @ViewBuilder
-    func glassPanel(cornerRadius: CGFloat) -> some View {
+    func glassPanel(cornerRadius: CGFloat,
+                    tint: Color = .clear,
+                    tintStrength: Double = 0.0) -> some View {
         if #available(iOS 26.0, *), GlassConfig.useNative {
-            glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            glassEffect(nativeGlass(tint: tint, strength: tintStrength, interactive: false),
+                        in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         } else {
-            background { simulatedGlass(cornerRadius: cornerRadius) }
+            background { simulatedGlass(cornerRadius: cornerRadius,
+                                        tint: tint,
+                                        tintStrength: tintStrength) }
         }
     }
 
@@ -279,6 +285,21 @@ extension View {
         } else {
             buttonStyle(MaterialGlassRingButtonStyle(haptic: haptic))
         }
+    }
+}
+
+// MARK: - 只做按压反馈的按钮样式（玻璃由元素自己画，通常用在"图标一块玻璃 + 下方文字"的按键）
+
+/// 通话页那种「圆形玻璃图标 + 下面一行文字」的按键：
+/// 玻璃只能盖住图标本身，不能连文字一起包进去 —— 否则玻璃会被拉成竖着的长胶囊。
+/// 所以这里不用 glassButton（它会把整块 label 包上玻璃），只保留按压缩放，触感在 action 里自己发。
+struct PressScaleButtonStyle: ButtonStyle {
+    var scale: CGFloat = 0.94
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? scale : 1.0)
+            .animation(.spring(response: 0.28, dampingFraction: 0.72), value: configuration.isPressed)
     }
 }
 
