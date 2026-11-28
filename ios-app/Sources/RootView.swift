@@ -2,9 +2,10 @@ import SwiftUI
 
 // MARK: - 根视图
 //
-// 结构原则（已验证可用的布局）：
-// 1. ZStack 叠放：背景 → 消息列表（按运行时测量的顶栏/输入栏高度避让）
-//    → 顶栏（顶部固定）→ 输入区（底部固定）。
+// 结构原则（v19 起）：
+// 1. 顶栏 / 消息列表 / 输入区用 VStack 真正排开，互不重叠。
+//    以前是 ZStack 叠放 + 读测量高度做 padding 避让，但 topBarHeight 初值为 0，
+//    第一帧列表贴在屏幕顶端，新对话的时间胶囊会被头像盖住 —— 改成布局分离后这类空窗消失。
 // 2. 玻璃只画在元素自身 bounds 上，全屏绝不包 GlassEffectContainer，
 //    否则玻璃形状会被合成错位、画出屏幕。
 // 3. 动画只作用于消息列表，避免顶栏/输入区的玻璃跟着整屏重绘。
@@ -18,8 +19,6 @@ struct RootView: View {
     @State private var subject = ""
     @State private var activeSheet: SheetKind?
     @State private var callPresented = false
-    @State private var topBarHeight: CGFloat = 0
-    @State private var composerHeight: CGFloat = 0
 
     enum SheetKind: String, Identifiable {
         case plus, theme, settings, history
@@ -27,23 +26,13 @@ struct RootView: View {
     }
 
     var body: some View {
-        ZStack {
+        VStack(spacing: 0) {
+            TopBar(
+                onBack: { activeSheet = .history },
+                onVideo: { callPresented = true }
+            )
             messageList
-                .padding(.top, topBarHeight + 10)
-                .padding(.bottom, composerHeight)
-            VStack(spacing: 0) {
-                TopBar(
-                    onBack: { activeSheet = .history },
-                    onVideo: { callPresented = true }
-                )
-                .measureSize { topBarHeight = $0.height }
-                Spacer(minLength: 0)
-            }
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                Composer(onPlus: { activeSheet = .plus }, draft: $draft, subject: $subject)
-                    .measureSize { composerHeight = $0.height }
-            }
+            Composer(onPlus: { activeSheet = .plus }, draft: $draft, subject: $subject)
         }
         // 背景改为 .background 修饰：背景内容不参与布局，
         // 杜绝 scaledToFill 溢出把 ZStack 画布撑大（该模式自 v1 遗留）。
@@ -191,27 +180,3 @@ struct RootView: View {
     }
 }
 
-// MARK: - 运行时测量视图尺寸（iOS 16 兼容）
-// 用 PreferenceKey 读取顶栏/输入栏的实际高度，消息列表据此避让，
-// 替代写死的魔术数字，保证任意机型比例正确。
-
-private struct SizePreferenceKey: PreferenceKey {
-    static var defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-        value = nextValue()
-    }
-}
-
-extension View {
-    func measureSize(_ onChange: @escaping (CGSize) -> Void) -> some View {
-        background(
-            GeometryReader { geo in
-                Color.clear
-                    .preference(key: SizePreferenceKey.self, value: geo.size)
-            }
-        )
-        .onPreferenceChange(SizePreferenceKey.self) { size in
-            onChange(size)
-        }
-    }
-}
