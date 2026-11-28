@@ -26,9 +26,19 @@ struct RootView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            messageList
-            Composer(onPlus: { activeSheet = .plus }, draft: $draft, subject: $subject)
+        // 页面切换（v22）：
+        // 对话列表不再是 fullScreenCover —— 系统 cover 自带一层不透明底，页面和屏幕尺寸
+        // 一对不齐就上下露出黑边，而且它必然是整屏推入，背景会跟着一起动。
+        // 改成「同一个 ZStack 里换内容」：背景挂在 ZStack 外面且只挂一次，
+        // 切页时背景不动，只有内容层用 .opacity 交叉淡出淡入。
+        ZStack {
+            if conversationsPresented {
+                ConversationsScreen(showsBackground: false, onClose: closeConversations)
+                    .transition(.opacity)
+            } else {
+                chatScreen
+                    .transition(.opacity)
+            }
         }
         // 背景改为 .background 修饰：背景内容不参与布局，
         // 杜绝 scaledToFill 溢出把 ZStack 画布撑大（该模式自 v1 遗留）。
@@ -43,9 +53,24 @@ struct RootView: View {
         .fullScreenCover(isPresented: $callPresented) {
             CallScreen()
         }
-        .fullScreenCover(isPresented: $conversationsPresented) {
-            ConversationsScreen()
+    }
+
+    private var chatScreen: some View {
+        VStack(spacing: 0) {
+            messageList
+            Composer(onPlus: { activeSheet = .plus }, draft: $draft, subject: $subject)
         }
+    }
+
+    // MARK: - 页面切换
+
+    private func openConversations() {
+        Haptics.fire(.tap)
+        withAnimation(.easeInOut(duration: 0.28)) { conversationsPresented = true }
+    }
+
+    private func closeConversations() {
+        withAnimation(.easeInOut(duration: 0.28)) { conversationsPresented = false }
     }
 
     // MARK: - 背景
@@ -116,10 +141,7 @@ struct RootView: View {
             // 但拖动内容时消息仍能滚到玻璃下面 —— 不再是硬裁切，松手由 ScrollView 自己回弹。
             .safeAreaInset(edge: .top, spacing: 10) {
                 TopBar(
-                    onBack: {
-                        Haptics.fire(.tap)
-                        conversationsPresented = true
-                    },
+                    onBack: openConversations,
                     onVideo: { callPresented = true }
                 )
             }

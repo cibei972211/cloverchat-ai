@@ -6,9 +6,13 @@ import SwiftUI
 // 数据：ChatModel.conversations 归档历史，chat.currentSummary 是正在进行的这一段。
 
 struct ConversationsScreen: View {
+    /// true：自己画背景（独立使用）。false：嵌在 RootView 里，共用根背景（切页时背景不动）。
+    var showsBackground: Bool = true
+    /// 关闭回调。嵌在根视图里时不能用 @Environment(\.dismiss)，走这里。
+    var onClose: () -> Void = {}
+
     @EnvironmentObject private var profile: ProfileModel
     @EnvironmentObject private var chat: ChatModel
-    @Environment(\.dismiss) private var dismiss
 
     @State private var query = ""
 
@@ -36,7 +40,21 @@ struct ConversationsScreen: View {
         // 背景必须走 .background 修饰（不参与布局）。
         // 之前把它当 ZStack 子视图：scaledToFill 的图片把画布撑大，
         // 整页被放大居中、左右各裁掉一截 —— 表现就是按钮被拉长、标题和时间跑出屏幕。
-        .background { backgroundLayer }
+        .background {
+            if showsBackground {
+                backgroundLayer
+            } else {
+                // 嵌在根视图里：背景交给 RootView 不动，这层只是随内容淡入的轻微压暗
+                LinearGradient(
+                    colors: [Color.black.opacity(0.18),
+                             Color.black.opacity(0.10),
+                             Color.black.opacity(0.20)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
+            }
+        }
         // 与 RootView / CallScreen 同样的兜底：硬约束在物理屏幕内
         .frame(maxWidth: UIScreen.main.bounds.width,
                maxHeight: UIScreen.main.bounds.height)
@@ -80,7 +98,7 @@ struct ConversationsScreen: View {
         HStack(spacing: 10) {
             Button {
                 Haptics.fire(.tap)
-                dismiss()
+                onClose()
             } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 16, weight: .semibold))
@@ -144,7 +162,7 @@ struct ConversationsScreen: View {
                 Button {
                     Haptics.fire(.soft)
                     chat.newChat()
-                    dismiss()
+                    onClose()
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "square.and.pencil")
@@ -202,12 +220,12 @@ struct ConversationsScreen: View {
     private func row(_ conversation: Conversation, isCurrent: Bool) -> some View {
         Button {
             guard !isCurrent else {
-                dismiss()
+                onClose()
                 return
             }
             Haptics.fire(.pick)
             chat.open(conversation)
-            dismiss()
+            onClose()
         } label: {
             HStack(spacing: 12) {
                 ZStack {
