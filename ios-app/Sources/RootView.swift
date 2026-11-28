@@ -2,10 +2,9 @@ import SwiftUI
 
 // MARK: - 根视图
 //
-// 结构原则（v19 起）：
-// 1. 顶栏 / 消息列表 / 输入区用 VStack 真正排开，互不重叠。
-//    以前是 ZStack 叠放 + 读测量高度做 padding 避让，但 topBarHeight 初值为 0，
-//    第一帧列表贴在屏幕顶端，新对话的时间胶囊会被头像盖住 —— 改成布局分离后这类空窗消失。
+// 结构原则（v20 起）：
+// 1. 顶栏用 safeAreaInset 插在消息列表的安全区里：内容顶部内缩（第一条时间胶囊不会被头像压住），
+//    但拖动时内容仍能滚到玻璃下面，不再有一条硬裁切线；松手由 ScrollView 自己回弹。
 // 2. 玻璃只画在元素自身 bounds 上，全屏绝不包 GlassEffectContainer，
 //    否则玻璃形状会被合成错位、画出屏幕。
 // 3. 动画只作用于消息列表，避免顶栏/输入区的玻璃跟着整屏重绘。
@@ -19,18 +18,15 @@ struct RootView: View {
     @State private var subject = ""
     @State private var activeSheet: SheetKind?
     @State private var callPresented = false
+    @State private var conversationsPresented = false
 
     enum SheetKind: String, Identifiable {
-        case plus, theme, settings, history
+        case plus, theme, settings
         var id: String { rawValue }
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            TopBar(
-                onBack: { activeSheet = .history },
-                onVideo: { callPresented = true }
-            )
             messageList
             Composer(onPlus: { activeSheet = .plus }, draft: $draft, subject: $subject)
         }
@@ -46,6 +42,9 @@ struct RootView: View {
         .sheet(item: $activeSheet, content: sheetContent)
         .fullScreenCover(isPresented: $callPresented) {
             CallScreen()
+        }
+        .fullScreenCover(isPresented: $conversationsPresented) {
+            ConversationsScreen()
         }
     }
 
@@ -113,6 +112,17 @@ struct RootView: View {
             .onChange(of: chat.messages) { _ in scrollToBottom(proxy) }
             .onChange(of: chat.liveText) { _ in scrollToBottom(proxy, animated: false) }
             .onChange(of: chat.waitingReply) { _ in scrollToBottom(proxy) }
+            // 顶栏作为"安全区插入"：布局上占位（首帧就正确，第一条时间胶囊不会被头像压住），
+            // 但拖动内容时消息仍能滚到玻璃下面 —— 不再是硬裁切，松手由 ScrollView 自己回弹。
+            .safeAreaInset(edge: .top, spacing: 10) {
+                TopBar(
+                    onBack: {
+                        Haptics.fire(.tap)
+                        conversationsPresented = true
+                    },
+                    onVideo: { callPresented = true }
+                )
+            }
         }
     }
 
@@ -157,12 +167,6 @@ struct RootView: View {
         case .settings:
             SettingsSheet()
                 .presentationDetents([.large])
-        case .history:
-            HistorySheet(
-                onNewChat: { chat.newChat(); resetDraft(); activeSheet = nil },
-                onClear: { chat.clearChat(); resetDraft(); activeSheet = nil }
-            )
-            .presentationDetents([.medium])
         }
     }
 
