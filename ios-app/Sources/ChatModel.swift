@@ -71,11 +71,13 @@ final class ChatModel: ObservableObject {
 
     func send(text: String, subject: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !streaming else { return }
+        guard !trimmed.isEmpty else { return }
         let cleanSubject = subject.trimmingCharacters(in: .whitespaces)
         messages.append(ChatMessage(role: .user, text: trimmed, subject: cleanSubject, time: Date()))
         persist()
-        startReply(userText: trimmed)
+        // v24：不再因为"正在回复"就把新消息吞掉。任何一次发送都会重置冷却计时，
+        // 让用户能连着发几条，最后一起交给 AI。
+        scheduleReply()
     }
 
     /// 开新对话：把当前这一段先归档，再清空
@@ -163,28 +165,54 @@ final class ChatModel: ObservableObject {
         persist()
     }
 
-    private func startReply(userText: String) {
+    /// 冷却 + 请求：每发一条消息调用一次，会取消上一次的计时/请求并重新计时。
+    /// 所以"连发三条"的效果是：计时一直重置，等用户停手满了 N 秒，AI 才看到这三条。
+    private func scheduleReply() {
         streamTask?.cancel()
-        streaming = true
-        waitingReply = true
+        streamTask = nil
+
+        // 打断旧回复：没说完的半句不留（说明用户抢话了），清掉流式态
         liveActive = false
         liveText = ""
+        waitingReply = false
+        streaming = false
 
         let name = profile.name
         let config = profile.apiConfig
+        let systemPrompt = profile.systemPrompt
+        let delay = max(0, profile.replyDelaySeconds)
+        // 历史在调度时取快照；期间再来新消息会重新调度，所以快照始终跟得上
         let history = messages.suffix(20).map {
             ChatTurn(role: $0.role.rawValue, content: $0.text)
         }
+        let userText = messages.last(where: { $0.role == .user })?.text ?? ""
 
-        streamTask = Task { [weak self] in
+        streamTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            try? await Task.sleep(nanoseconds: 480_000_000)
-            if Task.isCancelled { return }
+            self.streaming = true
+
+            // 1) 冷却期：这段时间屏幕上不显示三点（消息已经落好了），用户还能继续发
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                if Task.isCancelled {
+                    self.streaming = false
+                    return
+                }
+            }
+
+            // 2) 冷却结束，这时才让 AI 真正看到这一批消息
+            self.waitingReply = true
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            if Task.isCancelled {
+                self.waitingReply = false
+                self.streaming = false
+                return
+            }
 
             if config.isConfigured {
                 do {
                     try await APIClient().stream(config: config,
-                                                 systemPrompt: profile.systemPrompt,
+                                                 systemPrompt: systemPrompt,
                                                  name: name,
                                                  history: history) { full in
                         Task { @MainActor [weak self] in

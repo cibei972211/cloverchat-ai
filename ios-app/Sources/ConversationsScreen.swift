@@ -37,28 +37,33 @@ struct ConversationsScreen: View {
             list
         }
         .padding(.top, 6)
+        // 先定尺寸，再挂背景：背景画在这块 frame 后面，并且自己 ignoresSafeArea，
+        // 这样压暗层能一路铺到状态栏和底部 Home 条，不会在最上面断掉一条。
+        // 与 RootView / CallScreen 同样的兜底：硬约束在物理屏幕内。
+        .frame(maxWidth: UIScreen.main.bounds.width,
+               maxHeight: UIScreen.main.bounds.height)
         // 背景必须走 .background 修饰（不参与布局）。
         // 之前把它当 ZStack 子视图：scaledToFill 的图片把画布撑大，
         // 整页被放大居中、左右各裁掉一截 —— 表现就是按钮被拉长、标题和时间跑出屏幕。
+        //
+        // v24：这里原来还跟着一个 .clipped()，正是它把 ignoresSafeArea 撑出去的遮罩
+        // 又裁回安全区边界，于是状态栏那一条没有压暗，看着割裂。已删掉。
         .background {
             if showsBackground {
                 backgroundLayer
             } else {
-                // 嵌在根视图里：背景交给 RootView 不动，这层只是随内容淡入的轻微压暗
+                // 嵌在根视图里：背景交给 RootView 不动，这层只是随内容淡入的压暗，
+                // 上下两端给足浓度，覆盖状态栏与 Home 条区域
                 LinearGradient(
-                    colors: [Color.black.opacity(0.18),
+                    colors: [Color.black.opacity(0.22),
                              Color.black.opacity(0.10),
-                             Color.black.opacity(0.20)],
+                             Color.black.opacity(0.24)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
                 .ignoresSafeArea()
             }
         }
-        // 与 RootView / CallScreen 同样的兜底：硬约束在物理屏幕内
-        .frame(maxWidth: UIScreen.main.bounds.width,
-               maxHeight: UIScreen.main.bounds.height)
-        .clipped()
     }
 
     // MARK: - 背景

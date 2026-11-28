@@ -24,6 +24,10 @@ final class ProfileModel: ObservableObject {
     @Published var systemPrompt: String {
         didSet { defaults.set(systemPrompt, forKey: "profile.prompt") }
     }
+    /// 发完消息后等多少秒才真的发给 AI（0 = 立刻）。给用户连发几条的余地。
+    @Published var replyDelaySeconds: Double {
+        didSet { defaults.set(replyDelaySeconds, forKey: "profile.replyDelay") }
+    }
     @Published var apiConfig: APIConfig {
         didSet {
             if let data = try? JSONEncoder().encode(apiConfig) {
@@ -48,6 +52,7 @@ final class ProfileModel: ObservableObject {
         themeID = defaults.string(forKey: "profile.theme") ?? "clover"
         // 没存过就是空字符串 —— 不给任何默认人格提示词
         systemPrompt = defaults.string(forKey: "profile.prompt") ?? ""
+        replyDelaySeconds = defaults.object(forKey: "profile.replyDelay") as? Double ?? 0
         if let data = defaults.data(forKey: "profile.api"),
            let config = try? JSONDecoder().decode(APIConfig.self, from: data) {
             apiConfig = config

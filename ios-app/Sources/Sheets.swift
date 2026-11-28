@@ -176,6 +176,7 @@ struct SettingsSheet: View {
     @State private var apiKey = ""
     @State private var model = ""
     @State private var prompt = ""
+    @State private var delaySeconds: Double = 0
     @State private var avatarItem: PhotosPickerItem?
     @State private var initialized = false
 
@@ -227,6 +228,8 @@ struct SettingsSheet: View {
 
                 promptEditor
 
+                delayRow
+
                 Text("提示词就是你自己的设定，原样作为 system 消息发送。留空就完全不发送，模型按接口原始行为回复 —— 内置人设已经去掉了。头像、名字与设置只保存在本机。")
                     .font(.system(size: 12))
                     .foregroundColor(.white.opacity(0.5))
@@ -269,6 +272,7 @@ struct SettingsSheet: View {
             apiKey = profile.apiConfig.apiKey
             model = profile.apiConfig.model
             prompt = profile.systemPrompt
+            delaySeconds = profile.replyDelaySeconds
         }
         .onChange(of: avatarItem) { item in
             guard let item else { return }
@@ -328,6 +332,46 @@ struct SettingsSheet: View {
         }
     }
 
+    /// 连发等待：发完消息先攒一会儿，再一起交给 AI
+    private var delayRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("连发等待")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+                Spacer()
+                Text(delaySeconds <= 0 ? "立即发给 AI" : "等 \(fmt(delaySeconds)) 秒再发")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(delaySeconds <= 0 ? .white.opacity(0.35) : Palette.sendMid.opacity(0.95))
+            }
+
+            HStack(spacing: 12) {
+                Slider(value: $delaySeconds, in: 0...12, step: 0.5)
+                    .tint(Color.white.opacity(0.85))
+                Text("\(fmt(delaySeconds))s")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.8))
+                    .frame(width: 40, alignment: .trailing)
+                    .monospacedDigit()
+            }
+
+            Text("冷却期内再发一条会重新计时，最后整批一起给 AI —— 想连发几句就用它。")
+                .font(.system(size: 11.5))
+                .foregroundColor(.white.opacity(0.45))
+                .lineSpacing(2)
+        }
+        .padding(12)
+        .background(Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.8)
+        )
+    }
+
+    private func fmt(_ value: Double) -> String {
+        value == floor(value) ? String(Int(value)) : String(format: "%.1f", value)
+    }
+
     private func save() {
         let trimmedBase = baseUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedBase.isEmpty && !trimmedBase.lowercased().hasPrefix("http://") && !trimmedBase.lowercased().hasPrefix("https://") {
@@ -337,6 +381,7 @@ struct SettingsSheet: View {
         }
         profile.name = String(name.trimmingCharacters(in: .whitespaces).prefix(12))
         profile.systemPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        profile.replyDelaySeconds = delaySeconds
         profile.apiConfig = APIConfig(
             baseUrl: trimmedBase,
             apiKey: apiKey.trimmingCharacters(in: .whitespacesAndNewlines),
