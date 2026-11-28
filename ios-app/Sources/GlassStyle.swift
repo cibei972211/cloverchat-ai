@@ -1,14 +1,17 @@
 import SwiftUI
 import UIKit
 
-// MARK: - 液态玻璃外观（材质模拟，v16）
+// MARK: - 全局开关（v17：真液态玻璃）
 //
-// 前情（v13–v15 实机结论）：本机型环境下，glassEffect（.interactive / .regular
-// 都一样）覆盖到的按钮全部收不到触摸——玻璃在内层、外层、有无按压样式都试过；
-// 同一块玻璃里的 TextField 却能正常输入。原生液态玻璃与"按钮可点"不可兼得，
-// 所以本构建继续走"材质高仿"路线：
-//   真实模糊打底 + 着色层 + 左上流光 + 按压时高光位移 + 厚度描边 + 底缘环境光。
-// v16 相对 v12 的变化：着色层（蓝/红玻璃）、按压高光位移、统一触感反馈。
+// iOS 26+ 走系统原生 Liquid Glass（.glassEffect 真玻璃：折射、镜面、按压液体形变）；
+// 低于 iOS 26 自动退回材质高仿（v12 方案，已验证可用）。
+//
+// 历史：v13–v15 在实机上出现过"玻璃盖住的按钮收不到触摸"。所以保留这个总开关：
+// 若实机上按钮又点不动，把 useNative 改成 false 即可立刻回到材质方案，其它代码不用动。
+
+enum GlassConfig {
+    static let useNative = true
+}
 
 // MARK: - 触感反馈
 
@@ -21,8 +24,7 @@ enum HapticKind {
     case warning    // 危险操作、失败
 }
 
-/// 统一触感入口。
-/// 用 UIFeedbackGenerator（iOS 16 兼容，不依赖 iOS 17 的 .sensoryFeedback）。
+/// 统一触感入口。用 UIFeedbackGenerator（iOS 16 兼容，不依赖 iOS 17 的 .sensoryFeedback）。
 /// 每次触发后立刻 prepare()，连续点击也不会掉手感。
 enum Haptics {
     private static let light = UIImpactFeedbackGenerator(style: .light)
@@ -55,9 +57,57 @@ enum Haptics {
     }
 }
 
-// MARK: - 玻璃外观
+// MARK: - 原生液态玻璃（iOS 26+）
 
-/// 顶层函数：静态面板与按钮样式共用。
+/// 统一构造原生玻璃：可着色 + 可交互（按压时有液体形变与高光回应）
+@available(iOS 26.0, *)
+func nativeGlass(tint: Color, strength: Double, interactive: Bool) -> Glass {
+    let tinted = Glass.regular.tint(tint.opacity(strength))
+    return interactive ? tinted.interactive() : tinted
+}
+
+/// 原生玻璃按钮：玻璃画在 label 上（Apple 推荐的位置），按压动画与触感由本样式负责
+@available(iOS 26.0, *)
+struct NativeGlassButtonStyle: ButtonStyle {
+    var cornerRadius: CGFloat
+    var tint: Color = .clear
+    var tintStrength: Double = 0.0
+    var haptic: HapticKind = .tap
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .glassEffect(nativeGlass(tint: tint, strength: tintStrength, interactive: true),
+                         in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.72), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { isPressed in
+                if isPressed { Haptics.fire(haptic) }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+}
+
+/// 原生玻璃外圈：头像这类内容不透明的按钮，玻璃比内容大一圈，露出真实的折射边缘
+@available(iOS 26.0, *)
+struct NativeGlassRingButtonStyle: ButtonStyle {
+    var haptic: HapticKind = .tap
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(3)
+            .glassEffect(.regular.interactive(), in: Circle())
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(.spring(response: 0.28, dampingFraction: 0.72), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { isPressed in
+                if isPressed { Haptics.fire(haptic) }
+            }
+            .contentShape(Circle())
+    }
+}
+
+// MARK: - 材质回退（iOS 16+）
+
+/// 顶层函数：材质玻璃，静态面板与按钮样式共用。
 /// - tint: 着色（.clear 表示无色玻璃）
 /// - tintStrength: 着色浓度（0–1），彩色按钮用高一点
 /// - pressed: 按压态，高光更强、阴影更近，模拟液体被挤压
@@ -69,11 +119,9 @@ func simulatedGlass(cornerRadius: CGFloat,
 
     return shape
         .fill(.ultraThinMaterial)
-        // 着色层：clear 时无效果，蓝/红玻璃也有液体感
         .overlay(
             shape.fill(tint.opacity(pressed ? min(1, tintStrength + 0.10) : tintStrength))
         )
-        // 左上斜向流光
         .overlay(
             LinearGradient(
                 colors: [Color.white.opacity(pressed ? 0.46 : 0.34),
@@ -85,7 +133,6 @@ func simulatedGlass(cornerRadius: CGFloat,
             .blendMode(.plusLighter)
             .clipShape(shape)
         )
-        // 按压时中间抬起一条高光：镜面随手指位移
         .overlay(
             LinearGradient(
                 stops: [
@@ -99,7 +146,6 @@ func simulatedGlass(cornerRadius: CGFloat,
             .blendMode(.plusLighter)
             .clipShape(shape)
         )
-        // 底缘环境反光（玻璃厚度感）
         .overlay(
             LinearGradient(
                 colors: [Color.clear, Color.white.opacity(0.10)],
@@ -109,7 +155,6 @@ func simulatedGlass(cornerRadius: CGFloat,
             .blendMode(.plusLighter)
             .clipShape(shape)
         )
-        // 高光描边：上亮中弱下回亮
         .overlay(
             shape.strokeBorder(
                 LinearGradient(
@@ -130,18 +175,8 @@ func simulatedGlass(cornerRadius: CGFloat,
                 y: pressed ? 4 : 8)
 }
 
-extension View {
-    /// 静态玻璃（非交互元素：输入面板、气泡、分隔条、胶囊）
-    func glassPanel(cornerRadius: CGFloat) -> some View {
-        background { simulatedGlass(cornerRadius: cornerRadius) }
-    }
-}
-
-// MARK: - 按钮玻璃（可点击元素）
-
-/// 玻璃按钮：材质玻璃背景 + 按压回弹 + 触感反馈。
-/// 除了视觉，这里是**所有**按钮触感的唯一来源——按下瞬间触发一次。
-struct GlassButtonStyle: ButtonStyle {
+/// 材质玻璃按钮（iOS 26 以下，或关掉开关时使用）
+struct MaterialGlassButtonStyle: ButtonStyle {
     var cornerRadius: CGFloat
     var tint: Color = .clear
     var tintStrength: Double = 0.45
@@ -165,9 +200,8 @@ struct GlassButtonStyle: ButtonStyle {
     }
 }
 
-/// 圆形玻璃外圈：给头像这类内容不透明的按钮用。
-/// 只在边缘做高光玻璃环，不遮挡里面的照片。
-struct GlassRingButtonStyle: ButtonStyle {
+/// 材质玻璃外圈（头像用）
+struct MaterialGlassRingButtonStyle: ButtonStyle {
     var haptic: HapticKind = .tap
     var lineWidth: CGFloat = 1.4
 
@@ -202,24 +236,49 @@ struct GlassRingButtonStyle: ButtonStyle {
     }
 }
 
+// MARK: - 统一入口
+
 extension View {
+    /// 静态玻璃面板（非交互元素：输入面板、气泡、分隔条、胶囊）
+    @ViewBuilder
+    func glassPanel(cornerRadius: CGFloat) -> some View {
+        if #available(iOS 26.0, *), GlassConfig.useNative {
+            glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        } else {
+            background { simulatedGlass(cornerRadius: cornerRadius) }
+        }
+    }
+
     /// 液态玻璃按钮（统一入口）
-    /// - tint: 着色，默认无色玻璃；彩色按钮传入蓝/红
+    /// - tint: 着色，默认无色玻璃；发送/挂断这类传蓝/红
     /// - tintStrength: 着色浓度
     /// - haptic: 按下时的触感类型
+    @ViewBuilder
     func glassButton(cornerRadius: CGFloat,
                      tint: Color = .clear,
                      tintStrength: Double = 0.45,
                      haptic: HapticKind = .tap) -> some View {
-        buttonStyle(GlassButtonStyle(cornerRadius: cornerRadius,
-                                     tint: tint,
-                                     tintStrength: tintStrength,
-                                     haptic: haptic))
+        if #available(iOS 26.0, *), GlassConfig.useNative {
+            buttonStyle(NativeGlassButtonStyle(cornerRadius: cornerRadius,
+                                               tint: tint,
+                                               tintStrength: tintStrength,
+                                               haptic: haptic))
+        } else {
+            buttonStyle(MaterialGlassButtonStyle(cornerRadius: cornerRadius,
+                                                 tint: tint,
+                                                 tintStrength: tintStrength,
+                                                 haptic: haptic))
+        }
     }
 
     /// 圆形玻璃环按钮（头像这类内容不透明的按钮）
+    @ViewBuilder
     func glassRingButton(haptic: HapticKind = .tap) -> some View {
-        buttonStyle(GlassRingButtonStyle(haptic: haptic))
+        if #available(iOS 26.0, *), GlassConfig.useNative {
+            buttonStyle(NativeGlassRingButtonStyle(haptic: haptic))
+        } else {
+            buttonStyle(MaterialGlassRingButtonStyle(haptic: haptic))
+        }
     }
 }
 
