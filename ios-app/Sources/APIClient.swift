@@ -6,13 +6,16 @@ struct ChatTurn {
 }
 
 final class APIClient {
-    /// - systemPrompt: 用户自己写的提示词。填空则**完全不发送 system 消息**，
-    ///   模型按接口默认行为回复，不再有内置人格。
-    func stream(config: APIConfig,
-                systemPrompt: String,
-                name: String,
-                history: [ChatTurn],
-                onDelta: @escaping (String) -> Void) async throws {
+    /// 一次性拿到完整回复（v26 去掉流式）。
+    ///
+    /// 请求仍然用 `stream: true` 发出 —— 这条链路在各类中转/代理上都验证过，
+    /// 兼容性最好；只是我们不再把每个 delta 抛给 UI，而是在这里攒完再一次性返回。
+    /// 这样界面上就不存在「逐字重排 → 玻璃重绘 → 整屏闪」这一整类问题。
+    ///
+    /// - systemPrompt: 用户自己写的提示词。填空则**完全不发送 system 消息**。
+    func complete(config: APIConfig,
+                  systemPrompt: String,
+                  history: [ChatTurn]) async throws -> String {
         var base = config.baseUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         while base.hasSuffix("/") { base.removeLast() }
         guard let url = URL(string: base + "/chat/completions") else {
@@ -21,7 +24,7 @@ final class APIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 60
+        request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let key = config.apiKey.trimmingCharacters(in: .whitespaces)
         if !key.isEmpty {
@@ -58,15 +61,25 @@ final class APIClient {
             if payload == "[DONE]" { break }
             guard let data = payload.data(using: .utf8),
                   let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let choices = object["choices"] as? [[String: Any]],
-                  let delta = choices.first?["delta"] as? [String: Any],
-                  let piece = delta["content"] as? String, !piece.isEmpty else { continue }
-            full += piece
-            onDelta(full)
+                  let choices = object["choices"] as? [[String: Any]] else { continue }
+
+            // 兼容流式 delta
+            if let delta = choices.first?["delta"] as? [String: Any],
+               let piece = delta["content"] as? String, !piece.isEmpty {
+                full += piece
+                continue
+            }
+            // 兼容某些中转在 stream 模式下直接吐整段 message
+            if let message = choices.first?["message"] as? [String: Any],
+               let piece = message["content"] as? String, !piece.isEmpty {
+                full = piece
+            }
         }
 
-        guard !full.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        let trimmed = full.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
             throw URLError(.cannotParseResponse)
         }
+        return trimmed
     }
 }

@@ -42,8 +42,6 @@ final class ChatModel: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var streaming = false
     @Published var waitingReply = false
-    @Published var liveText = ""
-    @Published var liveActive = false
 
     /// 已经归档的历史对话（按更新时间倒序）
     @Published var conversations: [Conversation] = []
@@ -155,8 +153,6 @@ final class ChatModel: ObservableObject {
         streamTask = nil
         streaming = false
         waitingReply = false
-        liveActive = false
-        liveText = ""
     }
 
     private func reset() {
@@ -172,8 +168,6 @@ final class ChatModel: ObservableObject {
         streamTask = nil
 
         // 打断旧回复：没说完的半句不留（说明用户抢话了），清掉流式态
-        liveActive = false
-        liveText = ""
         waitingReply = false
         streaming = false
 
@@ -211,29 +205,21 @@ final class ChatModel: ObservableObject {
 
             if config.isConfigured {
                 do {
-                    try await APIClient().stream(config: config,
-                                                 systemPrompt: systemPrompt,
-                                                 name: name,
-                                                 history: history) { full in
-                        Task { @MainActor [weak self] in
-                            // 第一个 delta 到达时，把"等待"和"逐字"在同一帧里交接完：
-                            // waitingReply 与 liveActive 同时切换，气泡不会先消失再出现。
-                            self?.liveActive = true
-                            self?.liveText = full
-                            self?.waitingReply = false
-                        }
-                    }
-                    self.finishLive()
+                    let full = try await APIClient().complete(config: config,
+                                                              systemPrompt: systemPrompt,
+                                                              history: history)
+                    if Task.isCancelled { return }
+                    self.deliver(full)
                 } catch {
                     if Task.isCancelled { return }
                     let reply = PersonaEngine.reply(for: userText, subject: "", name: name)
-                    await self.typeOut(reply)
+                    self.deliver(reply)
                 }
             } else {
                 let reply = PersonaEngine.reply(for: userText, subject: "", name: name)
                 try? await Task.sleep(nanoseconds: 420_000_000)
                 if Task.isCancelled { return }
-                await self.typeOut(reply)
+                self.deliver(reply)
             }
 
             if !Task.isCancelled {
@@ -242,40 +228,18 @@ final class ChatModel: ObservableObject {
         }
     }
 
-    private func typeOut(_ reply: String) async {
-        // 和真实接口一致：进入逐字阶段时才同时把 waitingReply 交出去
-        waitingReply = false
-        liveActive = true
-        let chars = Array(reply)
-        var index = 0
-        let step = chars.count > 90 ? 2 : 1
-        while index < chars.count {
-            if Task.isCancelled {
-                liveActive = false
-                liveText = ""
-                return
-            }
-            index = min(chars.count, index + step)
-            liveText = String(chars[0..<index])
-            try? await Task.sleep(nanoseconds: 30_000_000)
-        }
-        finishLive()
-    }
-
-    private func finishLive() {
-        let text = liveText.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// 一次性落成气泡（v26 取消逐字输出）：
+    /// 消息进列表 + 三点消失，必须在同一个主线程 tick 内完成，
+    /// 这样 SwiftUI 只合成一帧，不会出现"气泡没了、消息还没到"的空档。
+    private func deliver(_ reply: String) {
+        let text = reply.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
-            liveActive = false
-            liveText = ""
+            waitingReply = false
             return
         }
-        // 顺序很关键：先把完整消息落进 messages，再清流式气泡。
-        // 两步都在同一次主线程 tick 里完成，SwiftUI 只合成一帧 ——
-        // 反过来写会有一帧"气泡没了、消息还没到"，画面就跳一下。
         messages.append(ChatMessage(role: .assistant, text: text, time: Date()))
         persist()
-        liveActive = false
-        liveText = ""
+        waitingReply = false
     }
 
     private func persist() {

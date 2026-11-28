@@ -38,6 +38,12 @@ final class ProfileModel: ObservableObject {
 
     @Published private(set) var avatar: UIImage?
     @Published private(set) var customBackground: UIImage?
+    /// App 内的应用名称（桌面上的名字由安装包决定，运行时改不了）
+    @Published var appName: String {
+        didSet { defaults.set(appName, forKey: "profile.appName") }
+    }
+    /// 用户自己裁剪的应用图标（存在本机 Documents，可导出、可打进下一版安装包）
+    @Published private(set) var customIcon: UIImage?
 
     private let defaults = UserDefaults.standard
     private var docs: URL {
@@ -45,6 +51,7 @@ final class ProfileModel: ObservableObject {
     }
     private var avatarURL: URL { docs.appendingPathComponent("avatar.jpg") }
     private var backgroundURL: URL { docs.appendingPathComponent("background.jpg") }
+    private var iconURL: URL { docs.appendingPathComponent("custom-icon.jpg") }
 
     init() {
         let storedName = defaults.string(forKey: "profile.name") ?? ""
@@ -53,6 +60,8 @@ final class ProfileModel: ObservableObject {
         // 没存过就是空字符串 —— 不给任何默认人格提示词
         systemPrompt = defaults.string(forKey: "profile.prompt") ?? ""
         replyDelaySeconds = defaults.object(forKey: "profile.replyDelay") as? Double ?? 0
+        appName = defaults.string(forKey: "profile.appName") ?? "小树"
+        customIcon = UIImage(contentsOfFile: iconURL.path)
         if let data = defaults.data(forKey: "profile.api"),
            let config = try? JSONDecoder().decode(APIConfig.self, from: data) {
             apiConfig = config
@@ -76,6 +85,18 @@ final class ProfileModel: ObservableObject {
         try? data.write(to: backgroundURL, options: .atomic)
         customBackground = UIImage(data: data)
         themeID = "custom"
+    }
+
+    /// 存图标：转成 JPEG 掉 alpha（App 图标不允许带透明通道）
+    func saveIcon(_ image: UIImage) {
+        guard let data = image.jpegData(compressionQuality: 0.94),
+              (try? data.write(to: iconURL, options: .atomic)) != nil else { return }
+        customIcon = UIImage(data: data)
+    }
+
+    func resetIcon() {
+        try? FileManager.default.removeItem(at: iconURL)
+        customIcon = nil
     }
 
     func resetProfile() {

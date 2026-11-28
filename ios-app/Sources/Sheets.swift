@@ -177,16 +177,24 @@ struct SettingsSheet: View {
     @State private var model = ""
     @State private var prompt = ""
     @State private var delaySeconds: Double = 0
+    @State private var appName = ""
+    @State private var iconItem: PhotosPickerItem?
+    @State private var cropTarget: CropTarget?
     @State private var avatarItem: PhotosPickerItem?
     @State private var initialized = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("个性化")
-                    .font(.system(size: 17, weight: .bold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.bottom, 2)
+                VStack(spacing: 3) {
+                    Text("个性化")
+                        .font(.system(size: 17, weight: .bold))
+                    Text(profile.appName)
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundColor(.white.opacity(0.45))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 2)
 
                 HStack(spacing: 14) {
                     PhotosPicker(selection: $avatarItem, matching: .images) {
@@ -217,6 +225,71 @@ struct SettingsSheet: View {
 
                 field("对方的名字", placeholder: "例如：小树", text: $name, keyboard: .default)
                     .padding(.top, 2)
+
+                Rectangle().fill(Color.white.opacity(0.12)).frame(height: 0.8).padding(.vertical, 4)
+
+                Text("应用外观")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+
+                field("应用名称", placeholder: "例如：小树", text: $appName, keyboard: .default)
+
+                HStack(spacing: 14) {
+                    iconPreview
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("应用图标")
+                            .font(.system(size: 15.5, weight: .semibold))
+                            .foregroundColor(.white)
+                        Text("从相册选图，自己拖动缩放裁剪")
+                            .font(.system(size: 12.5))
+                            .foregroundColor(.white.opacity(0.55))
+                    }
+                    Spacer()
+                    PhotosPicker(selection: $iconItem, matching: .images) {
+                        Text("更换")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 62, height: 36)
+                    }
+                    .glassButton(cornerRadius: 12, haptic: .pick)
+                }
+                .padding(4)
+
+                if profile.customIcon != nil {
+                    HStack(spacing: 10) {
+                        if let url = iconExportFile {
+                            ShareLink(item: url) {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "square.and.arrow.up")
+                                    Text("导出这张图标")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(.white)
+                                }
+                                .padding(.horizontal, 12)
+                                .frame(height: 34)
+                                .background(Color.white.opacity(0.13),
+                                            in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                            }
+                        }
+                        Button {
+                            Haptics.fire(.warning)
+                            profile.resetIcon()
+                        } label: {
+                            Text("恢复默认图标")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.85))
+                                .padding(.horizontal, 12)
+                                .frame(height: 34)
+                        }
+                        .glassButton(cornerRadius: 11, haptic: .warning)
+                        Spacer()
+                    }
+                }
+
+                Text("桌面上的名字和图标由安装包决定，iOS 不允许 App 在运行时改。这里改的是 App 内的称呼；裁好的图标会存在本机、可以导出，把它打进下一版安装包，桌面才会跟着变。")
+                    .font(.system(size: 11.5))
+                    .foregroundColor(.white.opacity(0.45))
+                    .lineSpacing(2)
 
                 Rectangle().fill(Color.white.opacity(0.12)).frame(height: 0.8).padding(.vertical, 4)
 
@@ -273,6 +346,7 @@ struct SettingsSheet: View {
             model = profile.apiConfig.model
             prompt = profile.systemPrompt
             delaySeconds = profile.replyDelaySeconds
+            appName = profile.appName
         }
         .onChange(of: avatarItem) { item in
             guard let item else { return }
@@ -282,6 +356,59 @@ struct SettingsSheet: View {
                     profile.saveAvatar(data)
                 }
             }
+        }
+        .onChange(of: iconItem) { item in
+            guard let item else { return }
+            Haptics.fire(.pick)
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    cropTarget = CropTarget(image: image)
+                }
+            }
+        }
+        .sheet(item: $cropTarget) { target in
+            IconCropper(image: target.image,
+                        onCancel: { cropTarget = nil },
+                        onDone: { image in
+                            profile.saveIcon(image)
+                            cropTarget = nil
+                        })
+        }
+    }
+
+    /// 图标预览：有自定义就用它，否则用默认的三叶草占位
+    private var iconPreview: some View {
+        Group {
+            if let icon = profile.customIcon {
+                Image(uiImage: icon).resizable().scaledToFill()
+            } else {
+                ZStack {
+                    LinearGradient(colors: [Color.white.opacity(0.20), Color.white.opacity(0.06)],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                    Image(systemName: "leaf.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.white.opacity(0.9))
+                }
+            }
+        }
+        .frame(width: 58, height: 58)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.7), lineWidth: 1.5)
+        )
+    }
+
+    /// 导出一个临时 png，给 ShareLink 用（存到相册 / 发给别人都行）
+    private var iconExportFile: URL? {
+        guard let icon = profile.customIcon, let data = icon.pngData() else { return nil }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("cloverchat-icon.png")
+        do {
+            try data.write(to: url, options: .atomic)
+            return url
+        } catch {
+            return nil
         }
     }
 
@@ -382,6 +509,8 @@ struct SettingsSheet: View {
         profile.name = String(name.trimmingCharacters(in: .whitespaces).prefix(12))
         profile.systemPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         profile.replyDelaySeconds = delaySeconds
+        let trimmedApp = String(appName.trimmingCharacters(in: .whitespaces).prefix(10))
+        if !trimmedApp.isEmpty { profile.appName = trimmedApp }
         profile.apiConfig = APIConfig(
             baseUrl: trimmedBase,
             apiKey: apiKey.trimmingCharacters(in: .whitespacesAndNewlines),
