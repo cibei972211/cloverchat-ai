@@ -26,16 +26,21 @@ struct ConversationsScreen: View {
     }
 
     var body: some View {
-        ZStack {
-            backgroundLayer
-            VStack(spacing: 12) {
-                header
-                searchBar
-                    .padding(.horizontal, 16)
-                list
-            }
-            .padding(.top, 6)
+        VStack(spacing: 12) {
+            header
+            searchBar
+                .padding(.horizontal, 16)
+            list
         }
+        .padding(.top, 6)
+        // 背景必须走 .background 修饰（不参与布局）。
+        // 之前把它当 ZStack 子视图：scaledToFill 的图片把画布撑大，
+        // 整页被放大居中、左右各裁掉一截 —— 表现就是按钮被拉长、标题和时间跑出屏幕。
+        .background { backgroundLayer }
+        // 与 RootView / CallScreen 同样的兜底：硬约束在物理屏幕内
+        .frame(maxWidth: UIScreen.main.bounds.width,
+               maxHeight: UIScreen.main.bounds.height)
+        .clipped()
     }
 
     // MARK: - 背景
@@ -93,6 +98,8 @@ struct ConversationsScreen: View {
             Text("\(chat.conversations.count) 段")
                 .font(.system(size: 12.5))
                 .foregroundColor(.white.opacity(0.55))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
         }
         .padding(.horizontal, 16)
     }
