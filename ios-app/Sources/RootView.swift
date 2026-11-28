@@ -118,13 +118,11 @@ struct RootView: View {
                         MessageBubble(message: message)
                             .id(message.id)
                     }
-                    if chat.waitingReply {
-                        TypingBubble()
-                            .id("typing")
-                    }
-                    if chat.liveActive {
-                        MessageBubble(liveText: chat.liveText)
-                            .id("live")
+                    // 等待三点 + 逐字输出是同一个视图（v23）：
+                    // 不然两个视图交接时会有一帧空档，气泡先缩再长，看着一跳一跳。
+                    if chat.waitingReply || chat.liveActive {
+                        StreamingBubble(text: chat.liveText)
+                            .id("streaming")
                     }
                 }
                 .padding(.top, 12)
@@ -132,10 +130,11 @@ struct RootView: View {
                 .padding(.horizontal, 16)
             }
             .scrollDismissesKeyboard(.immediately)
-            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: chat.messages)
+            // 不再给整个 ScrollView 挂 .animation(spring, value: messages)：
+            // 它让内容插入和下面的滚动动画各弹一次，两个弹簧打架，就是"一闪一闪"的来源。
             .onAppear { scrollToBottom(proxy) }
             .onChange(of: chat.messages) { _ in scrollToBottom(proxy) }
-            .onChange(of: chat.liveText) { _ in scrollToBottom(proxy, animated: false) }
+            .onChange(of: chat.liveText) { _ in scrollToBottom(proxy, animated: false, throttled: true) }
             .onChange(of: chat.waitingReply) { _ in scrollToBottom(proxy) }
             // 顶栏作为"安全区插入"：布局上占位（首帧就正确，第一条时间胶囊不会被头像压住），
             // 但拖动内容时消息仍能滚到玻璃下面 —— 不再是硬裁切，松手由 ScrollView 自己回弹。
@@ -148,20 +147,29 @@ struct RootView: View {
         }
     }
 
-    private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool = true) {
+    /// 流式逐字时的滚动节流：每 0.1s 最多跟一次，且不带动画，
+    /// 避免每 30ms 一次 scrollTo 把滚动条来回拽出抖动。
+    @State private var lastLiveScroll = Date.distantPast
+
+    private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool = true, throttled: Bool = false) {
         let target: AnyHashable?
-        if chat.waitingReply {
-            target = "typing"
-        } else if chat.liveActive {
-            target = "live"
+        if chat.waitingReply || chat.liveActive {
+            target = "streaming"
         } else {
             target = chat.messages.last?.id
         }
         guard let id = target else { return }
+
+        if throttled {
+            let now = Date()
+            guard now.timeIntervalSince(lastLiveScroll) > 0.1 else { return }
+            lastLiveScroll = now
+        }
+
         if animated {
-            withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .bottom) }
+            withAnimation(.easeOut(duration: 0.18)) { proxy.scrollTo(id, anchor: .bottom) }
         } else {
-            proxy.scrollTo(id, anchor: .bottom)
+            withTransaction(Transaction(animation: nil)) { proxy.scrollTo(id, anchor: .bottom) }
         }
     }
 

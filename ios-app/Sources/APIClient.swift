@@ -6,7 +6,10 @@ struct ChatTurn {
 }
 
 final class APIClient {
+    /// - systemPrompt: 用户自己写的提示词。填空则**完全不发送 system 消息**，
+    ///   模型按接口默认行为回复，不再有内置人格。
     func stream(config: APIConfig,
+                systemPrompt: String,
                 name: String,
                 history: [ChatTurn],
                 onDelta: @escaping (String) -> Void) async throws {
@@ -25,17 +28,21 @@ final class APIClient {
             request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
         }
 
-        let system = "你是「\(name)」，用户自定义的 AI 聊天伙伴。用简体中文回复，语气柔和自然，"
-            + "像熟悉的朋友。回复简洁（通常不超过三句），多回应情绪和具体感受，少说教，不说空话。"
-        let systemMessage: [String: Any] = ["role": "system", "content": system]
-        let historyMessages: [[String: Any]] = history.map {
-            ["role": $0.role, "content": $0.content]
+        // 用户提示词原样发送。留空就不发 system 消息（不再内置任何人格设定）。
+        let trimmedPrompt = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        var messages: [[String: Any]] = []
+        if !trimmedPrompt.isEmpty {
+            messages.append(["role": "system", "content": trimmedPrompt])
         }
+        messages.append(contentsOf: history.map {
+            ["role": $0.role, "content": $0.content]
+        })
+
         let body: [String: Any] = [
             "model": config.model,
             "stream": true,
             "temperature": 0.85,
-            "messages": [systemMessage] + historyMessages,
+            "messages": messages,
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 

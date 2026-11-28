@@ -65,11 +65,10 @@ struct Composer: View {
                     }
                     .padding(.vertical, 6)
 
-                if draft.trimmingCharacters(in: .whitespaces).isEmpty {
-                    micButton
-                } else {
-                    sendButton
-                }
+                // 一个按钮，两种形态（v23）。
+                // 原来是 mic 和 send 两个 Button 交替出现：每次发完消息 draft 变空，
+                // 两层原生玻璃被拆掉重建，就是一整下闪。现在只有一颗玻璃，换图标和着色。
+                actionButton
             }
         }
         .padding(.horizontal, 14)
@@ -78,35 +77,31 @@ struct Composer: View {
         .glassPanel(cornerRadius: 22)
     }
 
-    private var micButton: some View {
-        Button {
-            speech.toggle()
-        } label: {
-            Image(systemName: "mic.fill")
-                .font(.system(size: 16))
-                .foregroundColor(.white)
-                .frame(width: 32, height: 32)
-        }
-        // 录音中把玻璃染红，状态一眼可见
-        .glassButton(cornerRadius: 16,
-                     tint: speech.isRecording ? Palette.hangup : .clear,
-                     tintStrength: speech.isRecording ? 0.55 : 0.0,
-                     haptic: .pick)
-        .opacity(speech.isRecording ? 1 : 0.92)
+    private var canSend: Bool {
+        !draft.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
-    private var sendButton: some View {
-        Button(action: sendMessage) {
-            Image(systemName: "arrow.up")
-                .font(.system(size: 15, weight: .bold))
+    private var actionButton: some View {
+        Button {
+            if canSend {
+                sendMessage()
+            } else {
+                speech.toggle()
+            }
+        } label: {
+            Image(systemName: speech.isRecording
+                  ? "waveform"
+                  : (canSend ? "arrow.up" : "mic.fill"))
+                .font(.system(size: canSend ? 15 : 16, weight: canSend ? .bold : .regular))
                 .foregroundColor(.white)
                 .frame(width: 32, height: 32)
         }
-        // 蓝色玻璃（原来是实心渐变，v16 换成液体蓝）
+        // 录音中染红，有内容时是蓝色玻璃，空时为无色玻璃
         .glassButton(cornerRadius: 16,
-                     tint: Palette.sendMid,
-                     tintStrength: 0.78,
+                     tint: speech.isRecording ? Palette.hangup : (canSend ? Palette.sendMid : .clear),
+                     tintStrength: speech.isRecording ? 0.55 : (canSend ? 0.78 : 0.0),
                      haptic: .soft)
+        .opacity(speech.isRecording || canSend ? 1 : 0.92)
     }
 
     private func sendMessage() {

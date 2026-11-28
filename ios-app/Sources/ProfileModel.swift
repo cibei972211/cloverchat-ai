@@ -20,6 +20,10 @@ final class ProfileModel: ObservableObject {
     @Published var themeID: String {
         didSet { defaults.set(themeID, forKey: "profile.theme") }
     }
+    /// AI 提示词（system prompt）。默认空白，完全由用户自己写。
+    @Published var systemPrompt: String {
+        didSet { defaults.set(systemPrompt, forKey: "profile.prompt") }
+    }
     @Published var apiConfig: APIConfig {
         didSet {
             if let data = try? JSONEncoder().encode(apiConfig) {
@@ -42,6 +46,8 @@ final class ProfileModel: ObservableObject {
         let storedName = defaults.string(forKey: "profile.name") ?? ""
         name = storedName.isEmpty ? "小树" : String(storedName.prefix(12))
         themeID = defaults.string(forKey: "profile.theme") ?? "clover"
+        // 没存过就是空字符串 —— 不给任何默认人格提示词
+        systemPrompt = defaults.string(forKey: "profile.prompt") ?? ""
         if let data = defaults.data(forKey: "profile.api"),
            let config = try? JSONDecoder().decode(APIConfig.self, from: data) {
             apiConfig = config

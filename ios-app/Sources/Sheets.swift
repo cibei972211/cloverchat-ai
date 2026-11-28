@@ -175,6 +175,7 @@ struct SettingsSheet: View {
     @State private var baseUrl = ""
     @State private var apiKey = ""
     @State private var model = ""
+    @State private var prompt = ""
     @State private var avatarItem: PhotosPickerItem?
     @State private var initialized = false
 
@@ -222,7 +223,11 @@ struct SettingsSheet: View {
                 field("API Key（可选）", placeholder: "sk-...", text: $apiKey, keyboard: .default, secure: true)
                 field("模型", placeholder: "gpt-4o-mini", text: $model, keyboard: .default)
 
-                Text("兼容 OpenAI Chat Completions 接口；接口地址留空则使用内置模式。头像、名字与设置只保存在本机。")
+                Rectangle().fill(Color.white.opacity(0.12)).frame(height: 0.8).padding(.vertical, 4)
+
+                promptEditor
+
+                Text("提示词就是你自己的设定，原样作为 system 消息发送。留空就完全不发送，模型按接口原始行为回复 —— 内置人设已经去掉了。头像、名字与设置只保存在本机。")
                     .font(.system(size: 12))
                     .foregroundColor(.white.opacity(0.5))
                     .padding(.top, 2)
@@ -263,6 +268,7 @@ struct SettingsSheet: View {
             baseUrl = profile.apiConfig.baseUrl
             apiKey = profile.apiConfig.apiKey
             model = profile.apiConfig.model
+            prompt = profile.systemPrompt
         }
         .onChange(of: avatarItem) { item in
             guard let item else { return }
@@ -275,6 +281,53 @@ struct SettingsSheet: View {
         }
     }
 
+    /// 提示词编辑器：多行、默认空白，占位文字说明"留空就是裸跑"
+    private var promptEditor: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("AI 提示词")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+                Spacer()
+                if prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text("空")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.35))
+                } else {
+                    Text("\(prompt.count) 字")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                }
+            }
+
+            ZStack(alignment: .topLeading) {
+                if prompt.isEmpty {
+                    Text("例如：你是小树，说话简短自然，多用短句……\n留空则不发送任何提示词。")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.35))
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 12)
+                        .allowsHitTesting(false)
+                }
+
+                TextEditor(text: $prompt)
+                    .font(.system(size: 15))
+                    .foregroundColor(.white)
+                    .scrollContentBackground(.hidden)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+            }
+            .frame(height: 128)
+            .background(Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.8)
+            )
+        }
+    }
+
     private func save() {
         let trimmedBase = baseUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedBase.isEmpty && !trimmedBase.lowercased().hasPrefix("http://") && !trimmedBase.lowercased().hasPrefix("https://") {
@@ -283,6 +336,7 @@ struct SettingsSheet: View {
             return
         }
         profile.name = String(name.trimmingCharacters(in: .whitespaces).prefix(12))
+        profile.systemPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         profile.apiConfig = APIConfig(
             baseUrl: trimmedBase,
             apiKey: apiKey.trimmingCharacters(in: .whitespacesAndNewlines),

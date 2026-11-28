@@ -180,14 +180,19 @@ final class ChatModel: ObservableObject {
             guard let self else { return }
             try? await Task.sleep(nanoseconds: 480_000_000)
             if Task.isCancelled { return }
-            self.waitingReply = false
 
             if config.isConfigured {
                 do {
-                    try await APIClient().stream(config: config, name: name, history: history) { full in
+                    try await APIClient().stream(config: config,
+                                                 systemPrompt: profile.systemPrompt,
+                                                 name: name,
+                                                 history: history) { full in
                         Task { @MainActor [weak self] in
+                            // 第一个 delta 到达时，把"等待"和"逐字"在同一帧里交接完：
+                            // waitingReply 与 liveActive 同时切换，气泡不会先消失再出现。
                             self?.liveActive = true
                             self?.liveText = full
+                            self?.waitingReply = false
                         }
                     }
                     self.finishLive()
@@ -210,6 +215,8 @@ final class ChatModel: ObservableObject {
     }
 
     private func typeOut(_ reply: String) async {
+        // 和真实接口一致：进入逐字阶段时才同时把 waitingReply 交出去
+        waitingReply = false
         liveActive = true
         let chars = Array(reply)
         var index = 0
@@ -229,11 +236,18 @@ final class ChatModel: ObservableObject {
 
     private func finishLive() {
         let text = liveText.trimmingCharacters(in: .whitespacesAndNewlines)
-        liveActive = false
-        liveText = ""
-        guard !text.isEmpty else { return }
+        guard !text.isEmpty else {
+            liveActive = false
+            liveText = ""
+            return
+        }
+        // 顺序很关键：先把完整消息落进 messages，再清流式气泡。
+        // 两步都在同一次主线程 tick 里完成，SwiftUI 只合成一帧 ——
+        // 反过来写会有一帧"气泡没了、消息还没到"，画面就跳一下。
         messages.append(ChatMessage(role: .assistant, text: text, time: Date()))
         persist()
+        liveActive = false
+        liveText = ""
     }
 
     private func persist() {
