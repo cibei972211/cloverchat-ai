@@ -54,6 +54,7 @@ final class ProfileModel: ObservableObject {
     private var iconURL: URL { docs.appendingPathComponent("custom-icon.jpg") }
 
     init() {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let storedName = defaults.string(forKey: "profile.name") ?? ""
         name = storedName.isEmpty ? "小树" : String(storedName.prefix(12))
         themeID = defaults.string(forKey: "profile.theme") ?? "clover"
@@ -61,16 +62,16 @@ final class ProfileModel: ObservableObject {
         systemPrompt = defaults.string(forKey: "profile.prompt") ?? ""
         replyDelaySeconds = defaults.object(forKey: "profile.replyDelay") as? Double ?? 0
         appName = defaults.string(forKey: "profile.appName") ?? "小树"
-        customIcon = UIImage(contentsOfFile: iconURL.path)
+        customIcon = UIImage(contentsOfFile: docs.appendingPathComponent("custom-icon.jpg").path)
         if let data = defaults.data(forKey: "profile.api"),
            let config = try? JSONDecoder().decode(APIConfig.self, from: data) {
             apiConfig = config
         } else {
             apiConfig = APIConfig()
         }
-        avatar = UIImage(contentsOfFile: avatarURL.path) ?? UIImage(named: "Avatar")
+        avatar = UIImage(contentsOfFile: docs.appendingPathComponent("avatar.jpg").path) ?? UIImage(named: "Avatar")
         if themeID == "custom" {
-            customBackground = UIImage(contentsOfFile: backgroundURL.path)
+            customBackground = UIImage(contentsOfFile: docs.appendingPathComponent("background.jpg").path)
         }
     }
 

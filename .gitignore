@@ -2,3 +2,7 @@ CloverChat.ipa
 CloverChat-unsigned.ipa
 Payload/
 *.ipa
+_cred*.txt
+_auth*.txt
+_*.log
+_*.json
