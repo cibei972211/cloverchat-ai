@@ -25,10 +25,12 @@ struct MessageBubble: View {
     }
 
     var body: some View {
+        // 对侧 Spacer 保底 52pt：短消息就贴着自己那边窄窄一条，
+        // 长消息最多占到 (可用宽 - 52)，自然换行，不会每条都被拉成同样长度。
         HStack(alignment: .bottom, spacing: 0) {
-            if outgoing { Spacer(minLength: 0) }
+            if outgoing { Spacer(minLength: 52) }
             bubbleCore
-            if !outgoing { Spacer(minLength: 0) }
+            if !outgoing { Spacer(minLength: 52) }
         }
         .transition(.asymmetric(
             insertion: .move(edge: .bottom).combined(with: .opacity),
@@ -52,7 +54,9 @@ struct MessageBubble: View {
         }
         .padding(.horizontal, 15)
         .padding(.vertical, 10)
-        .frame(maxWidth: 300, alignment: .leading)
+        // 只要高度自适应，不要固定/弹性宽度：
+        // 之前 .frame(maxWidth: 300) 是弹性 frame，在 HStack 里会被撑满成 300，所有气泡就一样长了。
+        .fixedSize(horizontal: false, vertical: true)
 
         if outgoing {
             content.background(sendBubbleShape)
@@ -61,30 +65,13 @@ struct MessageBubble: View {
         }
     }
 
-    /// 半透蓝玻璃气泡：材质打底 + 蓝色渐变半覆盖（可透出背景）
+    /// 用户气泡：纯色玻璃（不要渐变），只在边缘留一道细高光和轻投影
     private var sendBubbleShape: some View {
         let shape = RoundedRectangle(cornerRadius: 21, style: .continuous)
         return shape
-            .fill(.ultraThinMaterial)
-            .overlay(
-                LinearGradient(
-                    colors: [Palette.sendTop.opacity(0.82), Palette.sendMid.opacity(0.85), Palette.sendBottom.opacity(0.88)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .clipShape(shape)
-            )
-            .overlay(
-                LinearGradient(
-                    colors: [Color.white.opacity(0.30), Color.white.opacity(0.05), Color.clear],
-                    startPoint: .topLeading,
-                    endPoint: .bottom
-                )
-                .blendMode(.plusLighter)
-                .clipShape(shape)
-            )
-            .overlay(shape.strokeBorder(Color.white.opacity(0.30), lineWidth: 0.8))
-            .shadow(color: Color.blue.opacity(0.30), radius: 13, x: 0, y: 9)
+            .fill(Palette.sendMid)
+            .overlay(shape.strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8))
+            .shadow(color: Color.black.opacity(0.22), radius: 11, x: 0, y: 6)
     }
 }
 
