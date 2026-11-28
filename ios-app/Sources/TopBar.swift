@@ -51,6 +51,8 @@ struct TopBar: View {
             avatarImage
                 .frame(width: 60, height: 60)
         }
+        // 头像内容不透明，玻璃只做外圈（高光边 + 按压回弹 + 触感）
+        .glassRingButton(haptic: .tap)
     }
 
     private var avatarImage: some View {
@@ -64,9 +66,6 @@ struct TopBar: View {
             }
         }
         .clipShape(Circle())
-        .overlay(Circle().strokeBorder(Color.white.opacity(0.95), lineWidth: 2.5))
-        .overlay(Circle().strokeBorder(Color.white.opacity(0.16), lineWidth: 4.5).blur(radius: 1))
-        .shadow(color: .black.opacity(0.32), radius: 12, y: 6)
     }
 
     private var namePill: some View {
@@ -83,8 +82,8 @@ struct TopBar: View {
             .padding(.trailing, 9)
             .frame(height: 33)
             .foregroundColor(.white)
-            .glassPanel(cornerRadius: 17)
         }
-        .buttonStyle(.plain)
+        // 玻璃由按钮样式统一绘制（原来内层 glassPanel + .plain 没有按压反馈）
+        .glassButton(cornerRadius: 17)
     }
 }

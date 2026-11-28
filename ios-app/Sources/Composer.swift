@@ -58,7 +58,11 @@ struct Composer: View {
                     .lineLimit(1...5)
                     .focused($inputFocused)
                     .submitLabel(.send)
-                    .onSubmit(sendMessage)
+                    // 键盘上的"发送"也给一次触感，和点按钮一致
+                    .onSubmit {
+                        Haptics.fire(.soft)
+                        sendMessage()
+                    }
                     .padding(.vertical, 6)
 
                 if draft.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -80,10 +84,15 @@ struct Composer: View {
         } label: {
             Image(systemName: "mic.fill")
                 .font(.system(size: 16))
-                .foregroundColor(speech.isRecording ? Color(red: 1.0, green: 0.42, blue: 0.38) : .white)
-                .frame(width: 30, height: 30)
+                .foregroundColor(.white)
+                .frame(width: 32, height: 32)
         }
-        .opacity(speech.isRecording ? 1 : 0.9)
+        // 录音中把玻璃染红，状态一眼可见
+        .glassButton(cornerRadius: 16,
+                     tint: speech.isRecording ? Palette.hangup : .clear,
+                     tintStrength: speech.isRecording ? 0.55 : 0.0,
+                     haptic: .pick)
+        .opacity(speech.isRecording ? 1 : 0.92)
     }
 
     private var sendButton: some View {
@@ -91,18 +100,13 @@ struct Composer: View {
             Image(systemName: "arrow.up")
                 .font(.system(size: 15, weight: .bold))
                 .foregroundColor(.white)
-                .frame(width: 30, height: 30)
-                .background(
-                    Circle().fill(
-                        LinearGradient(
-                            colors: [Palette.sendTop, Palette.sendBottom],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                )
-                .shadow(color: Color.blue.opacity(0.35), radius: 6, y: 3)
+                .frame(width: 32, height: 32)
         }
+        // 蓝色玻璃（原来是实心渐变，v16 换成液体蓝）
+        .glassButton(cornerRadius: 16,
+                     tint: Palette.sendMid,
+                     tintStrength: 0.78,
+                     haptic: .soft)
     }
 
     private func sendMessage() {

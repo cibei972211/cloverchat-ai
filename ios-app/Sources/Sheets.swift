@@ -21,9 +21,9 @@ private func sheetRow(icon: String,
             Spacer()
         }
         .padding(10)
-        .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
+    // 列表行也是按钮：给玻璃 + 按下触感；危险操作换成警告反馈
+    .glassButton(cornerRadius: 14, haptic: destructive ? .warning : .pick)
 }
 
 // MARK: - 加号菜单
@@ -77,6 +77,7 @@ struct ThemeSheet: View {
                         Image(theme.image).resizable().scaledToFill()
                     }
                     .onTapGesture {
+                        Haptics.fire(.pick)
                         profile.themeID = theme.id
                         dismiss()
                     }
@@ -106,6 +107,7 @@ struct ThemeSheet: View {
         .padding(18)
         .onChange(of: pickerItem) { item in
             guard let item else { return }
+            Haptics.fire(.pick)
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self) {
                     profile.saveBackground(data)
@@ -141,6 +143,23 @@ struct ThemeSheet: View {
                             LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
                         )
                 }
+            )
+            // 玻璃面：左上流光 + 底缘反光，读起来像一块玻璃压着照片
+            .overlay(
+                RoundedRectangle(cornerRadius: 17, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.white.opacity(0.32), location: 0),
+                                .init(color: Color.clear, location: 0.42),
+                                .init(color: Color.white.opacity(0.14), location: 1)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottom
+                        )
+                    )
+                    .blendMode(.plusLighter)
+                    .allowsHitTesting(false)
             )
             .shadow(color: .black.opacity(0.3), radius: 10, y: 6)
     }
@@ -214,17 +233,11 @@ struct SettingsSheet: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
-                        .background(
-                            LinearGradient(
-                                colors: [Palette.sendTop, Palette.sendMid, Palette.sendBottom],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        )
-                        .shadow(color: Color.blue.opacity(0.35), radius: 12, y: 6)
                 }
-                .buttonStyle(.plain)
+                // 蓝色液体玻璃（原来是实心渐变）
+                .glassButton(cornerRadius: 16,
+                             tint: Palette.sendMid,
+                             tintStrength: 0.78)
                 .padding(.top, 4)
 
                 Button {
@@ -253,6 +266,7 @@ struct SettingsSheet: View {
         }
         .onChange(of: avatarItem) { item in
             guard let item else { return }
+            Haptics.fire(.pick)
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self) {
                     profile.saveAvatar(data)
@@ -264,6 +278,8 @@ struct SettingsSheet: View {
     private func save() {
         let trimmedBase = baseUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedBase.isEmpty && !trimmedBase.lowercased().hasPrefix("http://") && !trimmedBase.lowercased().hasPrefix("https://") {
+            // 地址不是 http/https：给一次警告触感，别让人以为已经保存了
+            Haptics.fire(.warning)
             return
         }
         profile.name = String(name.trimmingCharacters(in: .whitespaces).prefix(12))

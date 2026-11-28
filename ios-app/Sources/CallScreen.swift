@@ -42,6 +42,8 @@ struct CallScreen: View {
         .task {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             connected = true
+            // 接通瞬间的"咔哒"反馈
+            Haptics.fire(.success)
         }
         .onAppear { pulse = true }
     }
@@ -108,53 +110,35 @@ struct CallScreen: View {
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(width: 66, height: 66)
-                        .background(
-                            Circle().fill(
-                                LinearGradient(
-                                    colors: [Color(red: 1.0, green: 0.42, blue: 0.37), Color(red: 0.9, green: 0.21, blue: 0.17)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                        )
-                        .shadow(color: Color.red.opacity(0.45), radius: 14, y: 8)
                     Text("挂断")
                         .font(.system(size: 12))
                         .foregroundColor(.white.opacity(0.8))
                 }
             }
-            .buttonStyle(.plain)
+            // 红色液体玻璃 + 危险动作触感
+            .glassButton(cornerRadius: 33,
+                         tint: Palette.hangup,
+                         tintStrength: 0.82,
+                         haptic: .warning)
         }
     }
 
-    @ViewBuilder
     private func callButton(icon: String, label: String, active: Bool, action: @escaping () -> Void) -> some View {
-        let buttonLabel = VStack(spacing: 9) {
-            callIcon(icon: icon, active: active)
-            Text(label)
-                .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.8))
+        Button(action: action) {
+            VStack(spacing: 9) {
+                Image(systemName: icon)
+                    .font(.system(size: 21, weight: .semibold))
+                    .foregroundColor(active ? Color(white: 0.12) : .white)
+                    .frame(width: 66, height: 66)
+                Text(label)
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.8))
+            }
         }
-        if active {
-            Button(action: action) { buttonLabel }
-                .buttonStyle(.plain)
-        } else {
-            Button(action: action) { buttonLabel }
-                .glassButton(cornerRadius: 33)
-        }
-    }
-
-    @ViewBuilder
-    private func callIcon(icon: String, active: Bool) -> some View {
-        let icon = Image(systemName: icon)
-            .font(.system(size: 21, weight: .semibold))
-            .foregroundColor(active ? Color(white: 0.12) : .white)
-            .frame(width: 66, height: 66)
-        if active {
-            icon
-                .background(Circle().fill(Color.white.opacity(0.94)))
-        } else {
-            icon
-        }
+        // 激活态 = 玻璃被点亮成白色液体，未激活 = 无色玻璃
+        .glassButton(cornerRadius: 33,
+                     tint: active ? .white : .clear,
+                     tintStrength: active ? 0.86 : 0.0,
+                     haptic: .pick)
     }
 }
